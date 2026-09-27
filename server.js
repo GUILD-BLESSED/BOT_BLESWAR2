@@ -10,13 +10,11 @@ const configBosses = require('./bosses.json');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de Turso en la nube (con respaldo local por si acaso)
 const db = createClient({
     url: process.env.TURSO_DATABASE_URL || "file:database.sqlite",
     authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// Inicializar tablas en Turso de forma asíncrona
 async function initDB() {
     try {
         await db.execute(`
@@ -72,7 +70,6 @@ app.post('/api/register', async (req, res) => {
         if (!username || !nickname || !password) return res.redirect('/login.html?error=empty');
 
         const hashedPassword = await bcrypt.hash(password, 10);
-
         const countResult = await db.execute(`SELECT COUNT(*) as count FROM users`);
         const isFirst = countResult.rows[0].count === 0;
         const status = isFirst ? 'active' : 'pending';
@@ -133,7 +130,6 @@ app.get('/', (req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Administración de usuarios en Turso
 app.get('/api/admin/users', requiereAdminAPI, async (req, res) => {
     try {
         const result = await db.execute(`SELECT id, username, nickname, status, role FROM users`);
@@ -169,32 +165,49 @@ app.post('/api/admin/update-role', requiereAdminAPI, async (req, res) => {
     }
 });
 
+// Scraping y conversión de intervalos a formato en minutos para script_2.js
 app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
     try {
         const { data } = await axios.get("https://es.megamu.net/boss-log", {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+            }
         });
         
         const $ = cheerio.load(data);
         let registros = [];
-        $('table tr, tbody tr').each((i, row) => {
+
+        $('table tr, tbody tr, tr').each((i, row) => {
             const cols = $(row).find('td');
-            if (cols.length >= 4) {
-                registros.push({
-                    fecha: cols.eq(0).text().trim(),
-                    boss: cols.eq(1).text().trim(),
-                    cazador: cols.eq(2).text().trim(),
-                    servidor: cols.eq(3).text().trim()
-                });
+            if (cols.length >= 3) {
+                const fecha = cols.eq(0).text().trim();
+                const boss = cols.eq(1).text().trim();
+                const cazador = cols.eq(2).text().trim();
+                const servidor = cols.length >= 4 ? cols.eq(3).text().trim() : "Sv 1";
+
+                if (fecha && boss && !fecha.toLowerCase().includes('fecha')) {
+                    registros.push({ fecha, boss, cazador, servidor });
+                }
             }
         });
-        res.json({ success: true, registros, configBosses, user: req.session.user });
+
+        // Adaptar bosses.json para que tenga respawnMinutes compatible con el frontend
+        let formattedConfig = {};
+        configBosses.forEach(b => {
+            formattedConfig[b.name] = {
+                respawnMinutes: Math.round(b.intervalo * 60),
+                mapa: b.mapa
+            };
+        });
+
+        res.json({ success: true, registros, configBosses: formattedConfig, user: req.session.user });
     } catch (error) {
-        res.status(500).json({ success: false, error: "No se pudo conectar con MegaMu" });
+        console.error("Error al extraer boss-log:", error.message);
+        res.status(500).json({ success: false, error: "No se pudo conectar con MegaMu", registros: [], configBosses: {} });
     }
 });
 
 app.listen(PORT, () => {
     console.log(`🌐 Servidor BLESWAR seguro corriendo en el puerto ${PORT}`);
 });
-            
+        
