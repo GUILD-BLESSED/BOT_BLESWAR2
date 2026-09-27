@@ -71,7 +71,6 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
         const $ = cheerio.load(data);
         let registros = [];
 
-        // Selector optimizado para la tabla de la web oficial de MegaMu
         $('table tr').each((i, row) => {
             const cols = $(row).find('td');
             if (cols.length >= 4) {
