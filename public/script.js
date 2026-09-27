@@ -9,6 +9,7 @@ let datosGlobales = [];
 let configBosses = [];
 let audioContext = null;
 let alertasDisparadas = {};
+let socket = null;
 
 function activarAudio() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -101,7 +102,6 @@ function actualizarContadores() {
     const ahora = new Date();
     let top10Lista = [];
 
-    // 1. Actualizar tabla principal del boss seleccionado
     const bossActual = configBosses[bossActualIndex];
     servidores.forEach(sv => {
         let svKey = sv.replace(/\s+/g, '');
@@ -126,7 +126,6 @@ function actualizarContadores() {
         respawnTd.innerText = fRespawn.toLocaleString('es-VE', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
         if (diferencia <= 0) {
-            // Boss Vivo: Calcular cuánto tiempo lleva vivo
             let tVivo = Math.abs(diferencia);
             let hV = Math.floor(tVivo / 3600000);
             let mV = Math.floor((tVivo % 3600000) / 60000);
@@ -155,7 +154,6 @@ function actualizarContadores() {
         }
     });
 
-    // 2. Calcular Top 10 de TODOS los bosses
     configBosses.forEach(boss => {
         servidores.forEach(sv => {
             let registro = datosGlobales.find(item => item.boss.toLowerCase().includes(boss.name.toLowerCase()) && item.servidor.toLowerCase().replace(/\s+/g, '') === sv.toLowerCase().replace(/\s+/g, ''));
@@ -187,7 +185,6 @@ function actualizarContadores() {
         });
     });
 
-    // Ordenar Top 10 (Vivos primero, luego los más cercanos)
     top10Lista.sort((a, b) => a.dif - b.dif);
     let top10Final = top10Lista.slice(0, 10);
     
@@ -202,9 +199,70 @@ function actualizarContadores() {
     }
 }
 
+// -------------------------------------------------------------------------
+// FUNCIONES DE SOCKET.IO PARA EL CHAT EN TIEMPO REAL
+// -------------------------------------------------------------------------
+function inicializarChat() {
+    socket = io();
+
+    socket.on('chat_history', (messages) => {
+        const chatBox = document.getElementById("chatMessages");
+        if (!chatBox) return;
+        chatBox.innerHTML = "";
+        messages.forEach(msg => agregarMensajeAlDOM(msg));
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+
+    socket.on('new_message', (msg) => {
+        agregarMensajeAlDOM(msg);
+        const chatBox = document.getElementById("chatMessages");
+        if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+    });
+}
+
+function agregarMensajeAlDOM(data) {
+    const chatBox = document.getElementById("chatMessages");
+    if (!chatBox) return;
+
+    // Eliminar texto de carga inicial si existe
+    if (chatBox.querySelector('div[style*="text-align: center"]')) {
+        chatBox.innerHTML = "";
+    }
+
+    const div = document.createElement("div");
+    div.className = "chat-message-item";
+    
+    const nickMostrar = data.character_nick || data.username || "Anónimo";
+    div.innerHTML = `<span class="chat-nick">[${nickMostrar}]:</span> ${escapeHtml(data.message)}`;
+    chatBox.appendChild(div);
+}
+
+function enviarMensaje() {
+    const input = document.getElementById("chatInput");
+    if (!input) return;
+    const texto = input.value.trim();
+    if (texto === "") return;
+
+    if (socket) {
+        socket.emit('send_message', texto);
+        input.value = "";
+    }
+}
+
+function handleKeyPress(event) {
+    if (event.key === 'Enter') {
+        enviarMensaje();
+    }
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     cargarDatosServidor();
+    inicializarChat();
     setInterval(actualizarContadores, 1000);
     setInterval(cargarDatosServidor, 120000);
 });
-                                                           
+                    
