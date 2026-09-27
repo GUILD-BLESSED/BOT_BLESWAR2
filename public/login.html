@@ -3,63 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLESWAR - Acceso</title>
+    <title>BLESWAR GUILD - Autenticación</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #0b1329; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #111e38; padding: 30px; border-radius: 10px; border: 1px solid #233b63; width: 320px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); text-align: center; }
-        h2 { color: #38bdf8; margin-bottom: 20px; }
-        input { width: 90%; padding: 10px; margin: 10px 0; background: #1b2a4a; border: 1px solid #233b63; color: #fff; border-radius: 5px; outline: none; }
-        button { width: 95%; padding: 10px; background: #0369a1; color: #fff; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        button:hover { background: #0284c7; }
-        .msg { font-size: 0.85rem; margin-top: 10px; color: #f59e0b; }
-        .toggle { font-size: 0.8rem; color: #94a3b8; margin-top: 15px; cursor: pointer; }
-        .toggle span { color: #38bdf8; text-decoration: underline; }
-        .oculto { display: none; }
+        .login-container { background: #111e38; padding: 30px; border-radius: 10px; border: 1px solid #233b63; width: 350px; text-align: center; box-shadow: 0px 4px 15px rgba(0,0,0,0.5); }
+        h2 { color: #38bdf8; margin-bottom: 20px; letter-spacing: 2px; }
+        input { width: 90%; padding: 10px; margin: 10px 0; background: #1b2a4a; border: 1px solid #233b63; color: white; border-radius: 5px; outline: none; }
+        input:focus { border-color: #38bdf8; }
+        button { width: 96%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #0369a1; }
+        .toggle-btn { background: none; color: #38bdf8; border: none; cursor: pointer; margin-top: 15px; text-decoration: underline; }
+        .toggle-btn:hover { color: #fff; }
+        .msg { margin-top: 15px; font-size: 0.9rem; font-weight: bold; }
+        .error { color: #ef4444; }
+        .success { color: #22c55e; }
+        footer { margin-top: 25px; color: #94a3b8; font-size: 0.75rem; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2 id="tituloForm">Iniciar Sesión</h2>
-        <div id="msgAlerta" class="msg"></div>
 
-        <form id="authForm" action="/api/login" method="POST">
+    <div class="login-container" id="loginBox">
+        <h2>INICIAR SESIÓN</h2>
+        <form action="/api/login" method="POST">
             <input type="text" name="username" placeholder="Usuario" required>
             <input type="password" name="password" placeholder="Contraseña" required>
-            <input type="text" id="inputNick" name="character_nick" placeholder="Nick de tu Personaje" class="oculto">
-            <button type="submit" id="btnSubmit">Entrar</button>
+            <button type="submit">ENTRAR</button>
         </form>
+        <button class="toggle-btn" onclick="toggleForm()">¿No tienes cuenta? Regístrate</button>
+        <div id="loginMsg" class="msg"></div>
+        <footer>Copyright © - Página Web Desarrollada por Myzor y Aravigel</footer>
+    </div>
 
-        <div class="toggle" onclick="cambiarModo()">¿No tienes cuenta? <span>Regístrate aquí</span></div>
+    <div class="login-container" id="registerBox" style="display: none;">
+        <h2>REGISTRO</h2>
+        <form action="/api/register" method="POST">
+            <input type="text" name="username" placeholder="Usuario" required>
+            <input type="text" name="character_nick" placeholder="Nick del Personaje" required>
+            <input type="password" name="password" placeholder="Contraseña" required>
+            <button type="submit">CREAR CUENTA</button>
+        </form>
+        <button class="toggle-btn" onclick="toggleForm()">¿Ya tienes cuenta? Inicia sesión</button>
+        <footer>Copyright © - Página Web Desarrollada por Myzor y Aravigel</footer>
     </div>
 
     <script>
-        let esRegistro = false;
-        const urlParams = new URLSearchParams(window.location.search);
-        const msgDiv = document.getElementById("msgAlerta");
-
-        if(urlParams.get('error') === 'invalid') msgDiv.innerText = "Usuario o contraseña incorrectos.";
-        if(urlParams.get('error') === 'pending') msgDiv.innerText = "Tu cuenta está pendiente de aprobación por el Admin.";
-        if(urlParams.get('error') === 'banned') msgDiv.innerText = "Tu cuenta ha sido baneada.";
-        if(urlParams.get('error') === 'userexists') msgDiv.innerText = "El nombre de usuario ya existe.";
-        if(urlParams.get('registered') === 'true') msgDiv.innerText = "¡Registro exitoso! Espera a que un administrador active tu cuenta.";
-        if(urlParams.get('error') === 'empty') msgDiv.innerText = "Todos los campos son obligatorios.";
-
-        function cambiarModo() {
-            esRegistro = !esRegistro;
-            document.getElementById("tituloForm").innerText = esRegistro ? "Registro de Usuario" : "Iniciar Sesión";
-            document.getElementById("btnSubmit").innerText = esRegistro ? "Registrarse" : "Entrar";
-            document.getElementById("authForm").action = esRegistro ? "/api/register" : "/api/login";
-            
-            let nickInput = document.getElementById("inputNick");
-            if (esRegistro) {
-                nickInput.classList.remove("oculto");
-                nickInput.required = true;
+        function toggleForm() {
+            const loginBox = document.getElementById('loginBox');
+            const registerBox = document.getElementById('registerBox');
+            if (loginBox.style.display === 'none') {
+                loginBox.style.display = 'block';
+                registerBox.style.display = 'none';
             } else {
-                nickInput.classList.add("oculto");
-                nickInput.required = false;
+                loginBox.style.display = 'none';
+                registerBox.style.display = 'block';
             }
-            msgDiv.innerText = "";
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
+        const registered = urlParams.get('registered');
+        const msgDiv = document.getElementById('loginMsg');
+
+        if (error === 'invalid') { msgDiv.innerHTML = '<span class="error">Usuario o contraseña incorrectos.</span>'; }
+        else if (error === 'banned') { msgDiv.innerHTML = '<span class="error">Tu cuenta ha sido baneada. Contacta al Admin.</span>'; }
+        else if (error === 'pending') { msgDiv.innerHTML = '<span class="error">Cuenta pendiente de aprobación por el Administrador.</span>'; }
+        else if (error === 'userexists') { msgDiv.innerHTML = '<span class="error">Este usuario ya existe. Elige otro.</span>'; toggleForm(); }
+        else if (error === 'empty') { msgDiv.innerHTML = '<span class="error">Por favor llena todos los campos.</span>'; toggleForm(); }
+        else if (error === 'error') { msgDiv.innerHTML = '<span class="error">Ocurrió un error en el servidor. Intenta de nuevo.</span>'; }
+
+        if (registered === 'true') {
+            msgDiv.innerHTML = '<span class="success">Registro exitoso. Espera a que un Administrador te apruebe.</span>';
         }
     </script>
+
 </body>
 </html>
