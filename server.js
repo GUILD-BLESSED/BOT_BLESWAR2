@@ -10,6 +10,7 @@ const configBosses = require('./bosses.json');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configuración de Turso en la nube
 const db = createClient({
     url: process.env.TURSO_DATABASE_URL || "file:database.sqlite",
     authToken: process.env.TURSO_AUTH_TOKEN,
@@ -165,7 +166,7 @@ app.post('/api/admin/update-role', requiereAdminAPI, async (req, res) => {
     }
 });
 
-// Scraping y conversión de intervalos a formato en minutos para script_2.js
+// WEB SCRAPING ROBUSTO EN EL SERVIDOR HACIA MEGAMU
 app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
     try {
         const { data } = await axios.get("https://es.megamu.net/boss-log", {
@@ -177,6 +178,7 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
         const $ = cheerio.load(data);
         let registros = [];
 
+        // Lee cualquier fila de tabla disponible en el boss-log
         $('table tr, tbody tr, tr').each((i, row) => {
             const cols = $(row).find('td');
             if (cols.length >= 3) {
@@ -191,23 +193,14 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
             }
         });
 
-        // Adaptar bosses.json para que tenga respawnMinutes compatible con el frontend
-        let formattedConfig = {};
-        configBosses.forEach(b => {
-            formattedConfig[b.name] = {
-                respawnMinutes: Math.round(b.intervalo * 60),
-                mapa: b.mapa
-            };
-        });
-
-        res.json({ success: true, registros, configBosses: formattedConfig, user: req.session.user });
+        res.json({ success: true, registros, configBosses, user: req.session.user });
     } catch (error) {
         console.error("Error al extraer boss-log:", error.message);
-        res.status(500).json({ success: false, error: "No se pudo conectar con MegaMu", registros: [], configBosses: {} });
+        res.status(500).json({ success: false, error: "No se pudo conectar con MegaMu", registros: [], configBosses });
     }
 });
 
 app.listen(PORT, () => {
     console.log(`🌐 Servidor BLESWAR seguro corriendo en el puerto ${PORT}`);
 });
-        
+            
