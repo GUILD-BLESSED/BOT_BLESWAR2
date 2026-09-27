@@ -12,13 +12,11 @@ async function cargarDatos() {
             datosGlobales = data.registros;
             configBossesGlobal = data.configBosses;
 
-            // Mostrar info del usuario conectado y enlace a admin si corresponde
             document.getElementById("userInfo").innerText = `Usuario: ${data.user.username} (${data.user.nickname || 'Sin Nick'})`;
             if(data.user.role === 'admin') {
                 document.getElementById("adminLinkContainer").innerHTML = `<a href="/admin.html" class="admin-link">⚙️ Panel Admin</a>`;
             }
 
-            // Llenar el selector de bosses si está vacío
             const select = document.getElementById("bossSelect");
             if(select.options.length <= 1) {
                 select.innerHTML = '<option value="TODOS">-- Todos los Bosses --</option>';
@@ -49,7 +47,6 @@ function activarAudio() {
 }
 
 function parsearFecha(fechaStr) {
-    // Formato recibido: "DD/MM/YYYY HH:MM:SS"
     if (!fechaStr) return null;
     let partes = fechaStr.split(" ");
     if(partes.length < 2) return null;
@@ -60,20 +57,22 @@ function parsearFecha(fechaStr) {
 }
 
 function actualizarTablas() {
-    const bossSeleccionado = document.getElementById("bossSelect").value;
+    const selectBoss = document.getElementById("bossSelect");
+    const bossSeleccionado = selectBoss ? selectBoss.value : "TODOS";
     const tbody = document.getElementById("tablaBody");
     const tbodyProximos = document.getElementById("tablaProximosBody");
     
+    if (!tbody || !tbodyProximos) return;
+
     tbody.innerHTML = "";
     let listaProximos = [];
     let alertaSonando = false;
 
-    // Procesar todos los registros de los logs
     let mapaBossesServidor = {};
     datosGlobales.forEach(reg => {
         let clave = reg.boss + "_" + reg.servidor;
         if(!mapaBossesServidor[clave]) {
-            mapaBossesServidor[clave] = reg; // Guardar el más reciente por boss y servidor
+            mapaBossesServidor[clave] = reg;
         }
     });
 
@@ -91,8 +90,7 @@ function actualizarTablas() {
                 let ahora = new Date();
                 let diferenciaMs = fechaRespawn - ahora;
 
-                // Agregar a la lista general de próximos respawns si aún no ha pasado mucho tiempo
-                if(diferenciaMs > -300000) { // Hasta 5 min después de revivir
+                if(diferenciaMs > -300000) {
                     listaProximos.push({
                         boss: reg.boss,
                         servidor: reg.servidor,
@@ -101,7 +99,6 @@ function actualizarTablas() {
                     });
                 }
 
-                // Filtrar para la tabla principal según selección
                 if(bossSeleccionado === "TODOS" || reg.boss === bossSeleccionado) {
                     let estadoHtml = "";
                     let claseCss = "";
@@ -115,10 +112,10 @@ function actualizarTablas() {
                         let secs = Math.floor((diferenciaMs % 60000) / 1000);
                         let tiempoTexto = (horas > 0 ? horas + "h " : "") + mins + "m " + secs + "s";
 
-                        if(diferenciaMs <= 300000) { // Menos de 5 min
+                        if(diferenciaMs <= 300000) {
                             claseCss = "alerta-5";
                             alertaSonando = true;
-                        } else if(diferenciaMs <= 600000) { // Menos de 10 min
+                        } else if(diferenciaMs <= 600000) {
                             claseCss = "alerta-10";
                         }
 
@@ -138,7 +135,6 @@ function actualizarTablas() {
         }
     }
 
-    // Renderizar tabla principal
     if(filasTablaPrincipal.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay registros para este jefe.</td></tr>`;
     } else {
@@ -154,7 +150,6 @@ function actualizarTablas() {
         });
     }
 
-    // Renderizar tabla de los 20 Próximos Respawns
     listaProximos.sort((a, b) => a.diferenciaMs - b.diferenciaMs);
     let top20 = listaProximos.slice(0, 20);
     tbodyProximos.innerHTML = "";
@@ -187,12 +182,10 @@ function actualizarTablas() {
         });
     }
 
-    // Alerta sonora si se activó y hay jefes próximos
     if(audioActivado && alertaSonando) {
         audioAlerta.play().catch(() => {});
     }
 }
 
-// Cargar datos al iniciar y actualizar automáticamente cada 30 segundos
 cargarDatos();
 setInterval(cargarDatos, 30000);
