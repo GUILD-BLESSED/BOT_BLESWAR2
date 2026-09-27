@@ -1,191 +1,162 @@
-let datosGlobales = [];
-let configBossesGlobal = {};
-let audioActivado = false;
-let audioAlerta = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+document.addEventListener('DOMContentLoaded', () => {
+    const bossSelect = document.getElementById('bossSelect');
+    const tablaPrincipalBody = document.getElementById('tablaPrincipalBody');
+    const proximosRespawnsBody = document.getElementById('proximosRespawnsBody');
+    const btnSonido = document.getElementById('btnSonido');
 
-async function cargarDatos() {
-    try {
-        const res = await fetch('/api/bosses');
-        const data = await res.json();
-        
-        if(data.success) {
-            datosGlobales = data.registros;
-            configBossesGlobal = data.configBosses;
+    let datosGlobales = [];
+    let configGlobal = {};
+    let audioHabilitado = false;
 
-            document.getElementById("userInfo").innerText = `Usuario: ${data.user.username} (${data.user.nickname || 'Sin Nick'})`;
-            if(data.user.role === 'admin') {
-                document.getElementById("adminLinkContainer").innerHTML = `<a href="/admin.html" class="admin-link">⚙️ Panel Admin</a>`;
-            }
-
-            const select = document.getElementById("bossSelect");
-            if(select.options.length <= 1) {
-                select.innerHTML = '<option value="TODOS">-- Todos los Bosses --</option>';
-                for(let bossName in configBossesGlobal) {
-                    let opt = document.createElement("option");
-                    opt.value = bossName;
-                    opt.innerText = bossName;
-                    select.appendChild(opt);
-                }
-            }
-
-            actualizarTablas();
-        }
-    } catch(e) {
-        console.error("Error cargando los datos:", e);
+    if (btnSonido) {
+        btnSonido.addEventListener('click', () => {
+            audioHabilitado = true;
+            btnSonido.textContent = '🔊 Alertas Sonoras Activas';
+            btnSonido.style.background = '#27ae60';
+        });
     }
-}
 
-function cambiarBoss() {
-    actualizarTablas();
-}
+    async function cargarDatos() {
+        try {
+            const res = await fetch('/api/bosses');
+            const data = await res.json();
 
-function activarAudio() {
-    audioActivado = true;
-    audioAlerta.play().catch(() => {});
-    document.getElementById("btnAudio").innerText = "🔊 Alertas Activadas";
-    document.getElementById("btnAudio").style.backgroundColor = "#22c55e";
-}
+            if (data.success) {
+                datosGlobales = data.registros;
+                configGlobal = data.configBosses;
 
-function parsearFecha(fechaStr) {
-    if (!fechaStr) return null;
-    let partes = fechaStr.split(" ");
-    if(partes.length < 2) return null;
-    let fechaPartes = partes[0].split("/");
-    let horaPartes = partes[1].split(":");
-    if(fechaPartes.length < 3 || horaPartes.length < 3) return null;
-    return new Date(fechaPartes[2], fechaPartes[1] - 1, fechaPartes[0], horaPartes[0], horaPartes[1], horaPartes[2]);
-}
-
-function actualizarTablas() {
-    const selectBoss = document.getElementById("bossSelect");
-    const bossSeleccionado = selectBoss ? selectBoss.value : "TODOS";
-    const tbody = document.getElementById("tablaBody");
-    const tbodyProximos = document.getElementById("tablaProximosBody");
-    
-    if (!tbody || !tbodyProximos) return;
-
-    tbody.innerHTML = "";
-    let listaProximos = [];
-    let alertaSonando = false;
-
-    let mapaBossesServidor = {};
-    datosGlobales.forEach(reg => {
-        let clave = reg.boss + "_" + reg.servidor;
-        if(!mapaBossesServidor[clave]) {
-            mapaBossesServidor[clave] = reg;
+                poblarSelectBosses();
+                actualizarTablas();
+            } else {
+                console.error("Error al obtener datos:", data.error);
+            }
+        } catch (e) {
+            console.error("Fallo de conexión con la API:", e);
         }
-    });
+    }
 
-    let filasTablaPrincipal = [];
+    function poblarSelectBosses() {
+        if (!bossSelect) return;
+        const valorActual = bossSelect.value;
+        bossSelect.innerHTML = '<option value="todos">-- Todos los Bosses --</option>';
 
-    for(let clave in mapaBossesServidor) {
-        let reg = mapaBossesServidor[clave];
-        let conf = configBossesGlobal[reg.boss];
-        
-        if(conf && conf.respawnMinutes) {
-            let fechaMuerte = parsearFecha(reg.fecha);
-            if(fechaMuerte) {
-                let respawnMs = conf.respawnMinutes * 60 * 1000;
-                let fechaRespawn = new Date(fechaMuerte.getTime() + respawnMs);
-                let ahora = new Date();
-                let diferenciaMs = fechaRespawn - ahora;
+        Object.keys(configGlobal).forEach(bossName => {
+            const opt = document.createElement('option');
+            opt.value = bossName;
+            opt.textContent = `${bossName} (${Math.round(configGlobal[bossName].respawnMinutes / 60)}h)`;
+            if (bossName === valorActual) opt.selected = true;
+            bossSelect.appendChild(opt);
+        });
+    }
 
-                if(diferenciaMs > -300000) {
-                    listaProximos.push({
-                        boss: reg.boss,
-                        servidor: reg.servidor,
-                        fechaRespawn: fechaRespawn,
-                        diferenciaMs: diferenciaMs
-                    });
-                }
+    function parsearFechaMegaMu(fechaStr) {
+        // Formato esperado: "YYYY-MM-DD HH:MM:SS"
+        if (!fechaStr) return null;
+        const partes = fechaStr.split(/[- :]/);
+        if (partes.length < 6) return new Date(fechaStr);
+        return new Date(partes[0], partes[1] - 1, partes[2], partes[3], partes[4], partes[5]);
+    }
 
-                if(bossSeleccionado === "TODOS" || reg.boss === bossSeleccionado) {
-                    let estadoHtml = "";
-                    let claseCss = "";
+    function actualizarTablas() {
+        if (!tablaPrincipalBody || !proximosRespawnsBody) return;
 
-                    if(diferenciaMs <= 0) {
-                        estadoHtml = `<span class="status-vivo">¡VIVO / YA RESPONDIÓ!</span>`;
-                    } else {
-                        let minsRestantes = Math.floor(diferenciaMs / 60000);
-                        let horas = Math.floor(minsRestantes / 60);
-                        let mins = minsRestantes % 60;
-                        let secs = Math.floor((diferenciaMs % 60000) / 1000);
-                        let tiempoTexto = (horas > 0 ? horas + "h " : "") + mins + "m " + secs + "s";
+        const bossSeleccionado = bossSelect ? bossSelect.value : 'todos';
+        tablaPrincipalBody.innerHTML = '';
+        proximosRespawnsBody.innerHTML = '';
 
-                        if(diferenciaMs <= 300000) {
-                            claseCss = "alerta-5";
-                            alertaSonando = true;
-                        } else if(diferenciaMs <= 600000) {
-                            claseCss = "alerta-10";
+        let listaProximos = [];
+
+        // Agrupar la última muerte por servidor para cada jefe configurado
+        Object.keys(configGlobal).forEach(bossName => {
+            if (bossSeleccionado !== 'todos' && bossSeleccionado !== bossName) return;
+
+            const config = configGlobal[bossName];
+            const respawnMs = config.respawnMinutes * 60 * 1000;
+
+            // Filtrar registros de la web para este jefe específico
+            const registrosBoss = datosGlobales.filter(r => r.boss.toLowerCase() === bossName.toLowerCase());
+
+            // Agrupar por servidor
+            const serversUnicos = ['Sv 1', 'Sv 2', 'Sv 3', 'Sv 4', 'Sv 5', 'Sv 6', 'Sv 7', 'Sv 8', 'Sv 10', 'Sv 11', 'Sv 12', 'Sv 14', 'Sv 15', 'Sv 16', 'Sv 17', 'Sv 19', 'Speed 1', 'Speed 2', 'Speed 3'];
+
+            serversUnicos.forEach(sv => {
+                const regSv = registrosBoss.find(r => r.servidor.toLowerCase() === sv.toLowerCase());
+                
+                let ultimaMuerteText = "Sin datos recientes";
+                let cazadorText = "-";
+                let proximaMuerteTime = null;
+                let tiempoRestanteText = "N/A";
+                let msRestantes = 0;
+
+                if (regSv) {
+                    ultimaMuerteText = regSv.fecha;
+                    cazadorText = regSv.cazador;
+                    const fechaMuerte = parsearFechaMegaMu(regSv.fecha);
+
+                    if (fechaMuerte && !isNaN(fechaMuerte)) {
+                        proximaMuerteTime = new Date(fechaMuerte.getTime() + respawnMs);
+                        msRestantes = proximaMuerteTime.getTime() - new Date().getTime();
+
+                        const opcionesFecha = { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                        proximoRespawnEst = proximaMuerteTime.toLocaleString('es-VE', opcionesFecha);
+
+                        if (msRestantes > 0) {
+                            const horas = Math.floor(msRestantes / (1000 * 60 * 60));
+                            const minutos = Math.floor((msRestantes % (1000 * 60 * 60)) / (1000 * 60));
+                            const segundos = Math.floor((msRestantes % (1000 * 60)) / 1000);
+                            tiempoRestanteText = `⏳ ${horas}h ${minutos}m ${segundos}s`;
+                        } else {
+                            tiempoRestanteText = "🟢 ¡RESPAWN DISPONIBLE!";
                         }
 
-                        estadoHtml = `<span class="status-tiempo ${claseCss}">${tiempoTexto}</span>`;
+                        listaProximos.push({
+                            boss: bossName,
+                            servidor: sv,
+                            proximoRespawn: proximaMuerteTime,
+                            msRestantes: msRestantes,
+                            textoRestante: tiempoRestanteText
+                        });
                     }
-
-                    filasTablaPrincipal.push({
-                        servidor: reg.servidor,
-                        fecha: reg.fecha,
-                        cazador: reg.cazador,
-                        respawnStr: fechaRespawn.toLocaleTimeString(),
-                        estadoHtml: estadoHtml,
-                        diferenciaMs: diferenciaMs
-                    });
                 }
-            }
+
+                // Fila de la tabla principal
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${sv}</strong></td>
+                    <td>${ultimaMuerteText}</td>
+                    <td>${cazadorText}</td>
+                    <td>${proximaMuerteTime ? proximaMuerteTime.toLocaleString() : 'N/A'}</td>
+                    <td>${tiempoRestanteText}</td>
+                `;
+                tablaPrincipalBody.appendChild(tr);
+            });
+        });
+
+        // Ordenar y rellenar la tabla de Próximos 20 Respawns
+        listaProximos.sort((a, b) => a.msRestantes - b.msRestantes);
+        const top20 = listaProximos.slice(0, 20);
+
+        if (top20.length === 0) {
+            proximosRespawnsBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Sin datos de próximos respawns.</td></tr>`;
+        } else {
+            top20.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${item.boss}</strong></td>
+                    <td>${item.servidor}</td>
+                    <td>${item.proximoRespawn.toLocaleString()}</td>
+                    <td>${item.textoRestante}</td>
+                `;
+                proximosRespawnsBody.appendChild(tr);
+            });
         }
     }
 
-    if(filasTablaPrincipal.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay registros para este jefe.</td></tr>`;
-    } else {
-        filasTablaPrincipal.sort((a, b) => a.diferenciaMs - b.diferenciaMs);
-        filasTablaPrincipal.forEach(f => {
-            tbody.innerHTML += `<tr>
-                <td><b>${f.servidor}</b></td>
-                <td>${f.fecha}</td>
-                <td>${f.cazador}</td>
-                <td>${f.respawnStr}</td>
-                <td>${f.estadoHtml}</td>
-            </tr>`;
-        });
+    if (bossSelect) {
+        bossSelect.addEventListener('change', actualizarTablas);
     }
 
-    listaProximos.sort((a, b) => a.diferenciaMs - b.diferenciaMs);
-    let top20 = listaProximos.slice(0, 20);
-    tbodyProximos.innerHTML = "";
-
-    if(top20.length === 0) {
-        tbodyProximos.innerHTML = `<tr><td colspan="4" style="text-align:center;">Sin datos de próximos respawns.</td></tr>`;
-    } else {
-        top20.forEach(item => {
-            let minsRestantes = Math.floor(item.diferenciaMs / 60000);
-            let tiempoTexto = "¡VIVO!";
-            let claseCss = "status-vivo";
-
-            if(item.diferenciaMs > 0) {
-                let horas = Math.floor(minsRestantes / 60);
-                let mins = minsRestantes % 60;
-                let secs = Math.floor((item.diferenciaMs % 60000) / 1000);
-                tiempoTexto = (horas > 0 ? horas + "h " : "") + mins + "m " + secs + "s";
-                
-                if(item.diferenciaMs <= 300000) claseCss = "alerta-5";
-                else if(item.diferenciaMs <= 600000) claseCss = "alerta-10";
-                else claseCss = "status-tiempo";
-            }
-
-            tbodyProximos.innerHTML += `<tr>
-                <td><b>${item.boss}</b></td>
-                <td>${item.servidor}</td>
-                <td>${item.fechaRespawn.toLocaleTimeString()}</td>
-                <td><span class="${claseCss}">${tiempoTexto}</span></td>
-            </tr>`;
-        });
-    }
-
-    if(audioActivado && alertaSonando) {
-        audioAlerta.play().catch(() => {});
-    }
-}
-
-cargarDatos();
-setInterval(cargarDatos, 30000);
+    // Cargar al iniciar y actualizar cada 30 segundos
+    cargarDatos();
+    setInterval(cargarDatos, 30000);
+});
