@@ -224,17 +224,16 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
         $('table tr, tbody tr').each((i, row) => {
             const cols = $(row).find('td');
             if (cols.length >= 4) {
-                const fechaLimpia = cols.eq(0).text().trim(); // Se mantiene intacta para que se vea bien en la tabla
+                const fechaLimpia = cols.eq(0).text().trim(); 
                 
-                // Creamos un campo auxiliar 'fechaISO' con la zona horaria de Brasil (-03:00) exclusivamente para cálculos
                 let fechaISO = fechaLimpia;
                 if (fechaLimpia && fechaLimpia.includes('-') && !fechaLimpia.includes('+') && !fechaLimpia.endsWith('Z')) {
                     fechaISO = fechaLimpia.replace(' ', 'T') + '-03:00';
                 }
 
                 registros.push({
-                    fecha: fechaLimpia,  // Lo que ve el usuario (ej: 2026-09-27 11:14)
-                    fechaISO: fechaISO,  // Para que tu frontend haga las cuentas matemáticas exactas
+                    fecha: fechaLimpia,  
+                    fechaISO: fechaISO,  
                     boss: cols.eq(1).text().trim(),
                     cazador: cols.eq(2).text().trim(),
                     servidor: cols.eq(3).text().trim()
@@ -249,4 +248,3 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🌐 Servidor BLESWAR corriendo en el puerto ${PORT}`));
-            
