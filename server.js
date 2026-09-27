@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const path = require('path');
@@ -9,6 +11,9 @@ const session = require('express-session');
 const configBosses = require('./bosses.json');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
 const PORT = process.env.PORT || 3000;
 
 // Configuración de la Base de Datos en Turso
@@ -19,7 +24,6 @@ const db = createClient({
 
 async function initDB() {
     try {
-        // 1. Crear la tabla en Turso si no existe
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +35,17 @@ async function initDB() {
             )
         `);
 
-        // 2. Migración automática: Si la tabla ya existía sin estas columnas, las añade sin borrar datos
+        // Tabla de chat en tiempo real con límite de historial automático
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                character_nick TEXT,
+                message TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
         const columnasAñadir = [
             'character_nick TEXT',
             'status TEXT DEFAULT "pending"',
@@ -41,12 +55,10 @@ async function initDB() {
         for (const col of columnasAñadir) {
             try {
                 await db.execute(`ALTER TABLE users ADD COLUMN ${col}`);
-            } catch (err) {
-                // Si la columna ya existe en Turso, se ignora el error
-            }
+            } catch (err) {}
         }
 
-        console.log("☁️ Base de datos Turso conectada y esquema actualizado con éxito.");
+        console.log("☁️ Base de datos Turso conectada y esquemas actualizados con éxito.");
     } catch (e) {
         console.error("❌ Error inicializando Turso:", e.message);
     }
@@ -55,12 +67,16 @@ initDB();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(session({
+
+const sessionMiddleware = session({
     secret: 'bleswar_secret_key_mega_mu',
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
-}));
+});
+
+app.use(sessionMiddleware);
+io.engine.use(sessionMiddleware);
 
 function requiereLoginAPI(req, res, next) {
     if (!req.session.user) return res.status(401).json({ success: false, error: "No autenticado" });
@@ -90,7 +106,6 @@ app.post('/api/register', async (req, res) => {
         const pClean = password.trim();
         const nickClean = character_nick.trim();
 
-        // Verificar si el usuario ya existe
         const checkUser = await db.execute({
             sql: "SELECT username FROM users WHERE username = ?",
             args: [uClean]
@@ -100,7 +115,6 @@ app.post('/api/register', async (req, res) => {
             return res.redirect('/login.html?error=userexists');
         }
 
-        // Contar número de usuarios para asignar Admin al primero
         const countRes = await db.execute("SELECT COUNT(*) as count FROM users");
         let totalUsers = 0;
         if (countRes.rows && countRes.rows.length > 0) {
@@ -247,4 +261,53 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
     }
 });
 
-app.listen(PORT, () => console.log(`🌐 Servidor BLESWAR corriendo en el puerto ${PORT}`));
+// -------------------------------------------------------------------------
+// SOCKET.IO: CHAT EN TIEMPO REAL (MANTIENE ÚNICAMENTE LOS ÚLTIMOS 100 MENSAJES)
+// -------------------------------------------------------------------------
+io.on('connection', async (socket) => {
+    const session = socket.request.session;
+    if (!session || !session.user) return;
+
+    try {
+        const history = await db.execute("SELECT username, character_nick, message, timestamp FROM chat_messages ORDER BY id DESC LIMIT 100");
+        socket.emit('chat_history', history.rows.reverse());
+    } catch (e) {
+        console.error("❌ Error cargando historial de chat:", e);
+    }
+
+    socket.on('send_message', async (text) => {
+        if (!text || typeof text !== 'string' || text.trim() === '') return;
+        
+        const cleanMsg = text.trim().substring(0, 500);
+        const user = session.user;
+
+        try {
+            await db.execute({
+                sql: "INSERT INTO chat_messages (username, character_nick, message) VALUES (?, ?, ?)",
+                args: [user.username, user.character_nick || user.username, cleanMsg]
+            });
+
+            // Limpieza automática para conservar solo los últimos 100 mensajes
+            await db.execute(`
+                DELETE FROM chat_messages 
+                WHERE id NOT IN (
+                    SELECT id FROM chat_messages ORDER BY id DESC LIMIT 100
+                )
+            `);
+
+            const newMessage = {
+                username: user.username,
+                character_nick: user.character_nick || user.username,
+                message: cleanMsg,
+                timestamp: new Date().toISOString()
+            };
+            
+            io.emit('new_message', newMessage);
+
+        } catch (e) {
+            console.error("❌ Error guardando mensaje en el chat:", e);
+        }
+    });
+});
+
+server.listen(PORT, () => console.log(`🌐 Servidor BLESWAR corriendo en el puerto ${PORT}`));
