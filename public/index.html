@@ -26,6 +26,8 @@
             text-align: center;
         }
         .top-bar { display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: 0 auto 10px auto; }
+        .admin-link { background-color: #0369a1; padding: 8px 12px; font-size: 0.85rem; text-decoration: none; border-radius: 6px; color: #fff; font-weight: bold; }
+        .admin-link:hover { background-color: #0284c7; }
         .btn-logout { background-color: #ef4444; padding: 8px 12px; font-size: 0.85rem; text-decoration: none; border-radius: 6px; color: #fff; font-weight: bold; }
         .btn-logout:hover { background-color: #dc2626; }
         h1 { color: var(--accent); margin-bottom: 5px; letter-spacing: 2px; }
@@ -45,7 +47,7 @@
         button:hover { background-color: #0284c7; }
         .table-container {
             max-width: 1100px;
-            margin: 0 auto;
+            margin: 0 auto 30px auto;
             background-color: var(--table-bg);
             border-radius: 10px;
             overflow-x: auto;
@@ -61,13 +63,17 @@
         .alerta-10 { color: var(--warning); font-weight: bold; animation: parpadeo 1s infinite; }
         .alerta-5 { color: var(--danger); font-weight: bold; animation: parpadeo 0.5s infinite; }
         @keyframes parpadeo { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        .section-title { color: var(--accent); text-align: left; max-width: 1100px; margin: 30px auto 10px auto; font-size: 1.2rem; font-weight: bold; text-transform: uppercase; }
         footer { margin-top: 30px; color: var(--text-muted); font-size: 0.75rem; }
     </style>
 </head>
 <body>
 
     <div class="top-bar">
-        <span id="userInfo" style="color: var(--accent); font-weight: bold;"></span>
+        <div>
+            <span id="userInfo" style="color: var(--accent); font-weight: bold; margin-right: 15px;"></span>
+            <span id="adminLinkContainer"></span>
+        </div>
         <a href="/api/logout" class="btn-logout">🚪 Cerrar Sesión</a>
     </div>
 
@@ -82,6 +88,7 @@
         <button id="btnAudio" onclick="activarAudio()">🔊 Activar Alertas Sonoras</button>
     </div>
 
+    <!-- Tabla Principal del Boss Seleccionado -->
     <div class="table-container">
         <table>
             <thead>
@@ -95,6 +102,24 @@
             </thead>
             <tbody id="tablaBody">
                 <tr><td colspan="5" style="text-align:center;">🔄 Conectando con el servidor BLESWAR...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Tabla Secundaria: Los 20 Próximos Respawns Generales -->
+    <div class="section-title">⚡ Próximos 20 Bosses en Resucitar</div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Boss</th>
+                    <th>Servidor</th>
+                    <th>Próximo Respawn</th>
+                    <th>Tiempo Restante</th>
+                </tr>
+            </thead>
+            <tbody id="tablaProximosBody">
+                <tr><td colspan="4" style="text-align:center;">Cargando próximos respawns...</td></tr>
             </tbody>
         </table>
     </div>
