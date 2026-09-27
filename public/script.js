@@ -7,6 +7,31 @@ const servidores = [
 let bossActualIndex = 0;
 let datosGlobales = [];
 let configBosses = [];
+let audioContext = null;
+let alertasDisparadas = {}; // Evita que el sonido se repita segundo a segundo en el mismo minuto
+
+function activarAudio() {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    document.getElementById("btnAudio").innerText = "🔊 Alertas Sonoras Activas";
+    document.getElementById("btnAudio").style.backgroundColor = "#16a34a";
+    reproducirBeep(600, 200);
+}
+
+function reproducirBeep(frecuencia, duracion) {
+    if (!audioContext) return;
+    try {
+        let osc = audioContext.createOscillator();
+        let gain = audioContext.createGain();
+        osc.type = "sine";
+        osc.frequency.value = frecuencia;
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.start();
+        setTimeout(() => { osc.stop(); }, duracion);
+    } catch (e) {
+        console.log("Error reproduciendo audio", e);
+    }
+}
 
 async function cargarDatosServidor() {
     try {
@@ -113,6 +138,8 @@ function actualizarContadores() {
             month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' 
         });
 
+        let idAlertaKey = `${boss.name}-${sv}`;
+
         if (diferencia <= 0) {
             let tiempoPasado = Math.abs(diferencia);
             let hPasadas = Math.floor(tiempoPasado / 3600000);
@@ -120,11 +147,33 @@ function actualizarContadores() {
             tiempoTd.innerHTML = `🟢 **¡VIVO!** (+${hPasadas}h ${mPasadas}m)`;
             tiempoTd.className = "status-vivo";
         } else {
+            let minutosRestantes = diferencia / 60000;
             let hRestantes = Math.floor(diferencia / 3600000);
             let mRestantes = Math.floor((diferencia % 3600000) / 60000);
             let sRestantes = Math.floor((diferencia % 60000) / 1000);
-            tiempoTd.innerHTML = `⏳ ${hRestantes}h ${mRestantes}m ${sRestantes}s`;
-            tiempoTd.className = "status-tiempo";
+
+            // Alerta 5 minutos antes (entre 4.5 y 5.5 minutos)
+            if (minutosRestantes > 4.5 && minutosRestantes <= 5.5) {
+                tiempoTd.innerHTML = `⚠️ **¡5 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
+                tiempoTd.className = "alerta-5";
+                if (alertasDisparadas[idAlertaKey] !== '5m') {
+                    reproducirBeep(880, 400); // Tono agudo
+                    alertasDisparadas[idAlertaKey] = '5m';
+                }
+            } 
+            // Alerta 10 minutos antes (entre 9.5 y 10.5 minutos)
+            else if (minutosRestantes > 9.5 && minutosRestantes <= 10.5) {
+                tiempoTd.innerHTML = `🔔 **¡10 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
+                tiempoTd.className = "alerta-10";
+                if (alertasDisparadas[idAlertaKey] !== '10m') {
+                    reproducirBeep(440, 300); // Tono medio
+                    alertasDisparadas[idAlertaKey] = '10m';
+                }
+            } 
+            else {
+                tiempoTd.innerHTML = `⏳ ${hRestantes}h ${mRestantes}m ${sRestantes}s`;
+                tiempoTd.className = "status-tiempo";
+            }
         }
     });
 }
@@ -132,5 +181,5 @@ function actualizarContadores() {
 document.addEventListener("DOMContentLoaded", () => {
     cargarDatosServidor();
     setInterval(actualizarContadores, 1000);
-    setInterval(cargarDatosServidor, 120000); // Recarga datos del servidor cada 2 minutos
+    setInterval(cargarDatosServidor, 120000);
 });
