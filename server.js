@@ -42,15 +42,18 @@ app.use(session({
   cookie: { secure: false }
 }));
 
-// Middleware de autenticación
-function requiereLoginAPI(req, res, next) {
-  if (req.session && req.session.user) {
-    return next();
-  }
-  res.status(401).json({ success: false, error: 'No autorizado' });
+// Middlewares de autenticación y roles
+function requiereLogin(req, res, next) {
+  if (req.session && req.session.user) return next();
+  res.redirect('/login.html');
 }
 
-// Cargar configuración de jefes desde bosses.json
+function requiereAdmin(req, res, next) {
+  if (req.session && req.session.user && req.session.user.role === 'admin') return next();
+  res.status(403).send('Acceso denegado');
+}
+
+// Cargar configuración de jefes
 let configBosses = [];
 try {
   const rawData = fs.readFileSync(path.join(__dirname, 'bosses.json'), 'utf8');
@@ -59,8 +62,11 @@ try {
   console.error("Error al cargar bosses.json:", e.message);
 }
 
-// Ruta API para obtener los registros del boss-log de MegaMu
-app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
+// API de Jefes (Web scraping de MegaMu)
+app.get('/api/bosses', async (req, res) => {
+    if (!req.session || !req.session.user) {
+        return res.status(401).json({ success: false, error: 'No autorizado' });
+    }
     try {
         const { data } = await axios.get("https://es.megamu.net/boss-log", {
             headers: { 
@@ -100,7 +106,7 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
     }
 });
 
-// Rutas de autenticación y registro
+// Rutas de autenticación
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -140,6 +146,42 @@ app.post('/api/register', async (req, res) => {
 app.get('/api/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/login.html');
+});
+
+// API Panel Admin para gestionar usuarios
+app.get('/api/admin/users', requiereAdmin, async (req, res) => {
+    try {
+        const result = await db.execute("SELECT id, username, nickname, role, status FROM users");
+        res.json({ success: true, users: result.rows });
+    } catch (e) {
+        res.json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/admin/action', requiereAdmin, async (req, res) => {
+    const { userId, action } = req.body;
+    try {
+        if (action === 'approve') {
+            await db.execute({ sql: "UPDATE users SET status = 'active' WHERE id = ?", args: [userId] });
+        } else if (action === 'ban') {
+            await db.execute({ sql: "UPDATE users SET status = 'banned' WHERE id = ?", args: [userId] });
+        } else if (action === 'make_admin') {
+            await db.execute({ sql: "UPDATE users SET role = 'admin' WHERE id = ?", args: [userId] });
+        } else if (action === 'make_user') {
+            await db.execute({ sql: "UPDATE users SET role = 'user' WHERE id = ?", args: [userId] });
+        }
+        res.json({ success: true });
+    } catch (e) {
+        res.json({ success: false, error: e.message });
+    }
+});
+
+app.get('/admin.html', requiereAdmin, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/', requiereLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
