@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLESWAR - Acceso</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #0b1329; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #111e38; padding: 30px; border-radius: 10px; border: 1px solid #233b63; width: 320px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); text-align: center; }
+        h2 { color: #38bdf8; margin-bottom: 20px; }
+        input { width: 90%; padding: 10px; margin: 10px 0; background: #1b2a4a; border: 1px solid #233b63; color: #fff; border-radius: 5px; outline: none; }
+        button { width: 95%; padding: 10px; background: #0369a1; color: #fff; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #0284c7; }
+        .msg { font-size: 0.85rem; margin-top: 10px; color: #f59e0b; }
+        .toggle { font-size: 0.8rem; color: #94a3b8; margin-top: 15px; cursor: pointer; }
+        .toggle span { color: #38bdf8; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 id="tituloForm">Iniciar Sesión</h2>
+        <div id="msgAlerta" class="msg"></div>
+
+        <form id="authForm" action="/api/login" method="POST">
+            <input type="text" name="username" placeholder="Usuario" required>
+            <input type="password" name="password" placeholder="Contraseña" required>
+            <button type="submit" id="btnSubmit">Entrar</button>
+        </form>
+
+        <div class="toggle" onclick="cambiarModo()">¿No tienes cuenta? <span>Regístrate aquí</span></div>
+    </div>
+
+    <script>
+        let esRegistro = false;
+        const urlParams = new URLSearchParams(window.location.search);
+        const msgDiv = document.getElementById("msgAlerta");
+
+        if(urlParams.get('error') === 'invalid') msgDiv.innerText = "Usuario o contraseña incorrectos.";
+        if(urlParams.get('error') === 'pending') msgDiv.innerText = "Tu cuenta está pendiente de aprobación por el Admin.";
+        if(urlParams.get('error') === 'banned') msgDiv.innerText = "Tu cuenta ha sido baneada.";
+        if(urlParams.get('error') === 'userexists') msgDiv.innerText = "El nombre de usuario ya existe.";
+        if(urlParams.get('registered') === 'true') msgDiv.innerText = "¡Registro exitoso! Espera a que un administrador active tu cuenta.";
+
+        function cambiarModo() {
+            esRegistro = !esRegistro;
+            document.getElementById("tituloForm").innerText = esRegistro ? "Registro de Usuario" : "Iniciar Sesión";
+            document.getElementById("btnSubmit").innerText = esRegistro ? "Registrarse" : "Entrar";
+            document.getElementById("authForm").action = esRegistro ? "/api/register" : "/api/login";
+            msgDiv.innerText = "";
+        }
+    </script>
+</body>
+</html>
