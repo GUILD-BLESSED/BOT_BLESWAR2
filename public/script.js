@@ -1,4 +1,9 @@
-const servidores = ["Sv 1", "Sv 2", "Sv 3", "Sv 4", "Sv 5", "Sv 6", "Sv 7", "Sv 8", "Sv 14", "Sv 15", "Sv 16"];
+const servidores = [
+    "Sv 1", "Sv 2", "Sv 3", "Sv 4", "Sv 5", "Sv 6", "Sv 7", "Sv 8", 
+    "Sv 10", "Sv 11", "Sv 12", "Sv 14", "Sv 15", "Sv 16", "Sv 17", "Sv 19", 
+    "Speed 1", "Speed 2", "Speed 3"
+];
+
 let bossActualIndex = 0;
 let datosGlobales = [];
 let configBosses = [];
@@ -44,21 +49,24 @@ function renderTabla() {
     tbody.innerHTML = "";
 
     servidores.forEach(sv => {
-        let registro = datosGlobales.find(item => 
-            item.boss.toLowerCase().includes(boss.name.toLowerCase()) && 
-            item.servidor.toLowerCase() === sv.toLowerCase()
-        );
+        let registro = datosGlobales.find(item => {
+            let bossCoincide = item.boss.toLowerCase().includes(boss.name.toLowerCase());
+            let svLimpio = item.servidor.toLowerCase().replace(/\s+/g, '');
+            let svTarget = sv.toLowerCase().replace(/\s+/g, '');
+            return bossCoincide && svLimpio === svTarget;
+        });
 
         let fechaMuerte = registro ? registro.fecha : "Sin datos recientes";
         let cazador = registro ? registro.cazador : "-";
+        let svKey = sv.replace(/\s+/g, '');
 
         let tr = document.createElement("tr");
         tr.innerHTML = `
             <td><strong>${sv}</strong></td>
-            <td id="fecha-${sv}">${fechaMuerte}</td>
+            <td id="fecha-${svKey}">${fechaMuerte}</td>
             <td>${cazador}</td>
-            <td id="respawn-${sv}">--/-- --:--</td>
-            <td id="tiempo-${sv}">Calculando...</td>
+            <td id="respawn-${svKey}">--/-- --:--</td>
+            <td id="tiempo-${svKey}">Calculando...</td>
         `;
         tbody.appendChild(tr);
     });
@@ -72,12 +80,13 @@ function actualizarContadores() {
     const ahora = new Date();
 
     servidores.forEach(sv => {
-        let fechaTd = document.getElementById(`fecha-${sv}`);
+        let svKey = sv.replace(/\s+/g, '');
+        let fechaTd = document.getElementById(`fecha-${svKey}`);
         if (!fechaTd) return;
         let fechaTexto = fechaTd.innerText.trim();
 
-        let respawnTd = document.getElementById(`respawn-${sv}`);
-        let tiempoTd = document.getElementById(`tiempo-${sv}`);
+        let respawnTd = document.getElementById(`respawn-${svKey}`);
+        let tiempoTd = document.getElementById(`tiempo-${svKey}`);
 
         if (fechaTexto === "Sin datos recientes" || !fechaTexto) {
             if(respawnTd) respawnTd.innerText = "N/A";
@@ -122,8 +131,6 @@ function actualizarContadores() {
 
 document.addEventListener("DOMContentLoaded", () => {
     cargarDatosServidor();
-    // Actualizar contadores locales cada segundo
     setInterval(actualizarContadores, 1000);
-    // Recargar datos frescos del servidor web scraping cada 2 minutos
-    setInterval(cargarDatosServidor, 120000);
+    setInterval(cargarDatosServidor, 120000); // Recarga datos del servidor cada 2 minutos
 });
