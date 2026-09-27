@@ -126,7 +126,13 @@ function actualizarContadores() {
         respawnTd.innerText = fRespawn.toLocaleString('es-VE', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
         if (diferencia <= 0) {
-            tiempoTd.innerHTML = `🟢 **¡VIVO!**`;
+            // Boss Vivo: Calcular cuánto tiempo lleva vivo
+            let tVivo = Math.abs(diferencia);
+            let hV = Math.floor(tVivo / 3600000);
+            let mV = Math.floor((tVivo % 3600000) / 60000);
+            let sV = Math.floor((tVivo % 60000) / 1000);
+            
+            tiempoTd.innerHTML = `🟢 **¡VIVO!** (Hace ${hV}h ${mV}m ${sV}s)`;
             tiempoTd.className = "status-vivo";
         } else {
             let mRestantes = Math.floor((diferencia % 3600000) / 60000);
@@ -159,8 +165,14 @@ function actualizarContadores() {
                     let diferencia = (fMuerte.getTime() + (boss.intervalo * 3600000)) - ahora;
                     let displayHTML = "";
                     let cls = "";
+                    
                     if(diferencia <= 0) {
-                        displayHTML = "🟢 ¡VIVO!";
+                        let tVivo = Math.abs(diferencia);
+                        let hV = Math.floor(tVivo / 3600000);
+                        let mV = Math.floor((tVivo % 3600000) / 60000);
+                        let sV = Math.floor((tVivo % 60000) / 1000);
+                        
+                        displayHTML = `🟢 ¡VIVO! (+${hV}h ${mV}m ${sV}s)`;
                         cls = "status-vivo";
                     } else {
                         let h = Math.floor(diferencia / 3600000);
@@ -195,3 +207,4 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(actualizarContadores, 1000);
     setInterval(cargarDatosServidor, 120000);
 });
+                                                           
