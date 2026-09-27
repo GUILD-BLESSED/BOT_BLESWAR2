@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>xBLESRANKx - MegaMu Boss Timer</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            color: var(--accent);
+            margin-bottom: 5px;
+        }
+        header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .search-box {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background-color: var(--card-bg);
+            color: var(--text-main);
+            font-size: 1rem;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        .boss-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .boss-card {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 5px solid var(--accent);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .boss-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .boss-map {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+        .boss-status {
+            font-weight: bold;
+            font-size: 0.95rem;
+        }
+        .status-vivo {
+            color: var(--success);
+        }
+        .status-tiempo {
+            color: var(--accent);
+        }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>xBLESRANKx BOSS TIMER</h1>
+            <p>Monitoreo de Jefes y Horarios en Tiempo Real • Venezuela</p>
+        </header>
+
+        <input type="text" id="searchInput" class="search-box" placeholder="🔍 Buscar jefe (ej. Selupan, Nix)..." onkeyup="filtrarBosses()">
+
+        <div id="bossContainer" class="boss-grid">
+            <!-- Las tarjetas se cargarán dinámicamente -->
+        </div>
+
+        <footer>
+            xBLESRANKx ALL RIGHTS RESERVED (C), VENEZUELA • DEVELOPED BY ANGEL BRICOURT (ARAVIGEL)
+        </footer>
+    </div>
+
+    <script src="bosses.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
