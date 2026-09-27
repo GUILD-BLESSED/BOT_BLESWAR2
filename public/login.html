@@ -14,6 +14,7 @@
         .msg { font-size: 0.85rem; margin-top: 10px; color: #f59e0b; }
         .toggle { font-size: 0.8rem; color: #94a3b8; margin-top: 15px; cursor: pointer; }
         .toggle span { color: #38bdf8; text-decoration: underline; }
+        .oculto { display: none; }
     </style>
 </head>
 <body>
@@ -22,7 +23,8 @@
         <div id="msgAlerta" class="msg"></div>
 
         <form id="authForm" action="/api/login" method="POST">
-            <input type="text" name="username" placeholder="Usuario" required>
+            <input type="text" name="username" placeholder="Usuario / Correo" required>
+            <input type="text" id="campoNick" name="nickname" placeholder="Nick de tu Personaje (MegaMu)" class="oculto">
             <input type="password" name="password" placeholder="Contraseña" required>
             <button type="submit" id="btnSubmit">Entrar</button>
         </form>
@@ -38,7 +40,7 @@
         if(urlParams.get('error') === 'invalid') msgDiv.innerText = "Usuario o contraseña incorrectos.";
         if(urlParams.get('error') === 'pending') msgDiv.innerText = "Tu cuenta está pendiente de aprobación por el Admin.";
         if(urlParams.get('error') === 'banned') msgDiv.innerText = "Tu cuenta ha sido baneada.";
-        if(urlParams.get('error') === 'userexists') msgDiv.innerText = "El nombre de usuario ya existe.";
+        if(urlParams.get('error') === 'userexists') msgDiv.innerText = "El nombre de usuario o nick ya existe.";
         if(urlParams.get('registered') === 'true') msgDiv.innerText = "¡Registro exitoso! Espera a que un administrador active tu cuenta.";
 
         function cambiarModo() {
@@ -46,6 +48,16 @@
             document.getElementById("tituloForm").innerText = esRegistro ? "Registro de Usuario" : "Iniciar Sesión";
             document.getElementById("btnSubmit").innerText = esRegistro ? "Registrarse" : "Entrar";
             document.getElementById("authForm").action = esRegistro ? "/api/register" : "/api/login";
+            
+            // Mostrar u ocultar el campo de Nick del personaje
+            const inputNick = document.getElementById("campoNick");
+            if (esRegistro) {
+                inputNick.classList.remove("oculto");
+                inputNick.required = true;
+            } else {
+                inputNick.classList.add("oculto");
+                inputNick.required = false;
+            }
             msgDiv.innerText = "";
         }
     </script>
