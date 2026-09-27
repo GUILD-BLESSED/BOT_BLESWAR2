@@ -5,5 +5,9 @@
   { "name": "Lord Silvester", "intervalo": 96, "mapa": "Uruk Mountain" },
   { "name": "Lord Of Ferea", "intervalo": 85, "mapa": "Ferea" },
   { "name": "Core Magriffy", "intervalo": 87.66, "mapa": "Nars" },
-  { "name": "God Of Darkness", "intervalo": 118, "mapa": "Swamp Of Darkness" }
+  { "name": "God Of Darkness", "intervalo": 118, "mapa": "Swamp Of Darkness" },
+  { "name": "Kundun", "intervalo": 12, "mapa": "Kalima 7" },
+  { "name": "Medusa", "intervalo": 12, "mapa": "Swamp of Peace" },
+  { "name": "Erohim", "intervalo": 12, "mapa": "Land of Trials" },
+  { "name": "Balgass", "intervalo": 24, "mapa": "Crywolf" }
 ]
