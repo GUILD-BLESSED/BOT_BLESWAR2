@@ -165,7 +165,6 @@ app.post('/api/admin/update-role', requiereAdminAPI, async (req, res) => {
     }
 });
 
-// API de Bosses haciendo Web Scraping robusto en el servidor
 app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
     try {
         const { data } = await axios.get("https://es.megamu.net/boss-log", {
@@ -209,4 +208,3 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
 app.listen(PORT, () => {
     console.log(`🌐 Servidor BLESWAR seguro corriendo en el puerto ${PORT}`);
 });
-                                         
