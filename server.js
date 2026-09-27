@@ -16,11 +16,12 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
     else console.log("📦 Base de datos conectada correctamente.");
 });
 
-// Crear tablas de usuarios si no existen
+// Crear tabla de usuarios incluyendo el campo nickname
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
+        nickname TEXT,
         password TEXT,
         status TEXT DEFAULT 'pending',
         role TEXT DEFAULT 'user'
@@ -36,7 +37,6 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// Middleware para verificar sesión en rutas protegidas
 function requiereLoginAPI(req, res, next) {
     if (!req.session.user) {
         return res.status(401).json({ success: false, error: "No autenticado" });
@@ -47,7 +47,6 @@ function requiereLoginAPI(req, res, next) {
     next();
 }
 
-// Middleware para verificar Admin en API
 function requiereAdminAPI(req, res, next) {
     if (!req.session.user || req.session.user.role !== 'admin') {
         return res.status(403).json({ success: false, error: "Acceso denegado" });
@@ -55,15 +54,14 @@ function requiereAdminAPI(req, res, next) {
     next();
 }
 
-// 1. Archivos públicos y de autenticación libres de bucles
 app.get('/login.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// Rutas de Autenticación
+// Registro con Nick de personaje
 app.post('/api/register', async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) return res.redirect('/login.html?error=empty');
+    const { username, nickname, password } = req.body;
+    if (!username || !nickname || !password) return res.redirect('/login.html?error=empty');
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -72,8 +70,8 @@ app.post('/api/register', async (req, res) => {
         const status = isFirst ? 'active' : 'pending';
         const role = isFirst ? 'admin' : 'user';
 
-        db.run(`INSERT INTO users (username, password, status, role) VALUES (?, ?, ?, ?)`, 
-            [username, hashedPassword, status, role], (err) => {
+        db.run(`INSERT INTO users (username, nickname, password, status, role) VALUES (?, ?, ?, ?, ?)`, 
+            [username, nickname, hashedPassword, status, role], (err) => {
             if (err) return res.redirect('/login.html?error=userexists');
             res.redirect('/login.html?registered=true');
         });
@@ -89,7 +87,7 @@ app.post('/api/login', (req, res) => {
         if (user.status === 'banned') return res.redirect('/login.html?error=banned');
         if (user.status === 'pending') return res.redirect('/login.html?error=pending');
 
-        req.session.user = { id: user.id, username: user.username, role: user.role, status: user.status };
+        req.session.user = { id: user.id, username: user.username, nickname: user.nickname, role: user.role, status: user.status };
         if (user.role === 'admin') res.redirect('/admin.html');
         else res.redirect('/');
     });
@@ -99,7 +97,6 @@ app.get('/api/logout', (req, res) => {
     req.session.destroy(() => { res.redirect('/login.html'); });
 });
 
-// 2. Control de acceso para páginas protegidas del cliente
 app.get('/admin.html', (req, res) => {
     if (!req.session.user || req.session.user.role !== 'admin') {
         return res.redirect('/login.html');
@@ -115,12 +112,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Servir recursos estáticos complementarios (css, js internos)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 3. Rutas de administración de usuarios (API Admin)
+// Mostrar el Nick en el panel de administración
 app.get('/api/admin/users', requiereAdminAPI, (req, res) => {
-    db.all(`SELECT id, username, status, role FROM users`, [], (err, rows) => {
+    db.all(`SELECT id, username, nickname, status, role FROM users`, [], (err, rows) => {
         if (err) return res.status(500).json({ success: false });
         res.json({ success: true, users: rows, currentUser: req.session.user.username });
     });
@@ -134,7 +130,6 @@ app.post('/api/admin/update-status', requiereAdminAPI, (req, res) => {
     });
 });
 
-// 4. Ruta de Web Scraping de Bosses (Protegida por API)
 app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
     try {
         const { data } = await axios.get("https://es.megamu.net/boss-log", {
