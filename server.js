@@ -1,189 +1,156 @@
 const express = require('express');
-const session = require('express-session');
-const bcrypt = require('bcrypt');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { createClient } = require('@libsql/client');
 const path = require('path');
-const fs = require('fs');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcryptjs');
+const session = require('express-session');
+const configBosses = require('./bosses.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de la base de datos Turso
-const db = createClient({
-  url: process.env.TURSO_DATABASE_URL || 'libsql://tu-base-de-datos.turso.io',
-  authToken: process.env.TURSO_AUTH_TOKEN || 'tu-token'
+const db = new sqlite3.Database('./database.sqlite', (err) => {
+    if (err) console.error("Error abriendo la base de datos", err.message);
+    else console.log("📦 Base de datos conectada correctamente.");
 });
 
-// Inicializar tabla de usuarios
-async function initDB() {
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      nickname TEXT UNIQUE,
-      password TEXT,
-      role TEXT DEFAULT 'user',
-      status TEXT DEFAULT 'pending'
-    )
-  `);
-}
-initDB();
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        character_nick TEXT,
+        status TEXT DEFAULT 'pending',
+        role TEXT DEFAULT 'user'
+    )`);
+});
 
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-
+app.use(express.json());
 app.use(session({
-  secret: 'bleswar_secret_key_2026',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false }
+    secret: 'bleswar_secret_key_mega_mu',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// Middlewares de autenticación y roles
-function requiereLogin(req, res, next) {
-  if (req.session && req.session.user) return next();
-  res.redirect('/login.html');
-}
-
-function requiereAdmin(req, res, next) {
-  if (req.session && req.session.user && req.session.user.role === 'admin') return next();
-  res.status(403).send('Acceso denegado');
-}
-
-// Cargar configuración de jefes
-let configBosses = [];
-try {
-  const rawData = fs.readFileSync(path.join(__dirname, 'bosses.json'), 'utf8');
-  configBosses = JSON.parse(rawData);
-} catch (e) {
-  console.error("Error al cargar bosses.json:", e.message);
-}
-
-// API de Jefes (Web scraping de MegaMu)
-app.get('/api/bosses', async (req, res) => {
-    if (!req.session || !req.session.user) {
-        return res.status(401).json({ success: false, error: 'No autorizado' });
+function requiereLoginAPI(req, res, next) {
+    if (!req.session.user) {
+        return res.status(401).json({ success: false, error: "No autenticado" });
     }
+    if (req.session.user.status === 'banned' || req.session.user.status === 'pending') {
+        return res.status(403).json({ success: false, error: "Acceso no autorizado" });
+    }
+    next();
+}
+
+function requiereAdminAPI(req, res, next) {
+    if (!req.session.user || req.session.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: "Acceso denegado" });
+    }
+    next();
+}
+
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.post('/api/register', async (req, res) => {
+    const { username, password, character_nick } = req.body;
+    if (!username || !password || !character_nick) return res.redirect('/login.html?error=empty');
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    db.get(`SELECT COUNT(*) as count FROM users`, async (err, row) => {
+        const isFirst = row.count === 0;
+        const status = isFirst ? 'active' : 'pending';
+        const role = isFirst ? 'admin' : 'user';
+
+        db.run(`INSERT INTO users (username, password, character_nick, status, role) VALUES (?, ?, ?, ?, ?)`, 
+            [username, hashedPassword, character_nick, status, role], (err) => {
+            if (err) return res.redirect('/login.html?error=userexists');
+            res.redirect('/login.html?registered=true');
+        });
+    });
+});
+
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.redirect('/login.html?error=invalid');
+        }
+        if (user.status === 'banned') return res.redirect('/login.html?error=banned');
+        if (user.status === 'pending') return res.redirect('/login.html?error=pending');
+
+        req.session.user = { id: user.id, username: user.username, character_nick: user.character_nick, role: user.role, status: user.status };
+        if (user.role === 'admin') res.redirect('/admin.html');
+        else res.redirect('/');
+    });
+});
+
+app.get('/api/logout', (req, res) => {
+    req.session.destroy(() => { res.redirect('/login.html'); });
+});
+
+app.get('/admin.html', (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'admin') {
+        return res.redirect('/login.html');
+    }
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/', (req, res) => {
+    if (!req.session.user) return res.redirect('/login.html');
+    if (req.session.user.status === 'banned' || req.session.user.status === 'pending') {
+        return res.redirect('/login.html?error=' + req.session.user.status);
+    }
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/admin/users', requiereAdminAPI, (req, res) => {
+    db.all(`SELECT id, username, character_nick, status, role FROM users`, [], (err, rows) => {
+        if (err) return res.status(500).json({ success: false });
+        res.json({ success: true, users: rows, currentUser: req.session.user.username });
+    });
+});
+
+app.post('/api/admin/update-status', requiereAdminAPI, (req, res) => {
+    const { userId, status } = req.body;
+    db.run(`UPDATE users SET status = ? WHERE id = ? AND role != 'admin'`, [status, userId], function(err) {
+        if (err) return res.status(500).json({ success: false });
+        res.json({ success: true });
+    });
+});
+
+app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
     try {
         const { data } = await axios.get("https://es.megamu.net/boss-log", {
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
         });
         
         const $ = cheerio.load(data);
         let registros = [];
-
-        $('table tr').each((i, row) => {
+        $('table tr, tbody tr').each((i, row) => {
             const cols = $(row).find('td');
             if (cols.length >= 4) {
-                const fecha = cols.eq(0).text().trim();
-                const boss = cols.eq(1).text().trim();
-                const cazador = cols.eq(2).text().trim();
-                const servidor = cols.eq(3).text().trim();
-
-                if (fecha && boss && !fecha.toLowerCase().includes('fecha')) {
-                    registros.push({ fecha, boss, cazador, servidor });
-                }
+                registros.push({
+                    fecha: cols.eq(0).text().trim(),
+                    boss: cols.eq(1).text().trim(),
+                    cazador: cols.eq(2).text().trim(),
+                    servidor: cols.eq(3).text().trim()
+                });
             }
         });
-
-        let formattedConfig = {};
-        configBosses.forEach(b => {
-            formattedConfig[b.name] = {
-                respawnMinutes: Math.round(b.intervalo * 60),
-                mapa: b.mapa
-            };
-        });
-
-        res.json({ success: true, registros, configBosses: formattedConfig, user: req.session.user });
+        res.json({ success: true, registros, configBosses, user: req.session.user });
     } catch (error) {
-        console.error("Error al extraer boss-log:", error.message);
-        res.status(500).json({ success: false, error: "No se pudo conectar con MegaMu", registros: [], configBosses: {} });
+        res.status(500).json({ success: false, error: "No se pudo conectar con MegaMu" });
     }
-});
-
-// Rutas de autenticación
-app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-    try {
-        const result = await db.execute({
-            sql: "SELECT * FROM users WHERE username = ? OR nickname = ?",
-            args: [username, username]
-        });
-        if (result.rows.length === 0) return res.json({ success: false, error: 'Usuario no encontrado' });
-        
-        const user = result.rows[0];
-        if (user.status !== 'active') return res.json({ success: false, error: 'Cuenta pendiente de aprobación' });
-
-        const match = await bcrypt.compare(password, user.password);
-        if (!match) return res.json({ success: false, error: 'Contraseña incorrecta' });
-
-        req.session.user = { id: user.id, username: user.username, nickname: user.nickname, role: user.role };
-        res.json({ success: true, role: user.role });
-    } catch (e) {
-        res.json({ success: false, error: e.message });
-    }
-});
-
-app.post('/api/register', async (req, res) => {
-    const { username, nickname, password } = req.body;
-    try {
-        const hashed = await bcrypt.hash(password, 10);
-        await db.execute({
-            sql: "INSERT INTO users (username, nickname, password, role, status) VALUES (?, ?, ?, 'user', 'pending')",
-            args: [username, nickname, hashed]
-        });
-        res.json({ success: true });
-    } catch (e) {
-        res.json({ success: false, error: 'El usuario o nick ya existe' });
-    }
-});
-
-app.get('/api/logout', (req, res) => {
-    req.session.destroy();
-    res.redirect('/login.html');
-});
-
-// API Panel Admin para gestionar usuarios
-app.get('/api/admin/users', requiereAdmin, async (req, res) => {
-    try {
-        const result = await db.execute("SELECT id, username, nickname, role, status FROM users");
-        res.json({ success: true, users: result.rows });
-    } catch (e) {
-        res.json({ success: false, error: e.message });
-    }
-});
-
-app.post('/api/admin/action', requiereAdmin, async (req, res) => {
-    const { userId, action } = req.body;
-    try {
-        if (action === 'approve') {
-            await db.execute({ sql: "UPDATE users SET status = 'active' WHERE id = ?", args: [userId] });
-        } else if (action === 'ban') {
-            await db.execute({ sql: "UPDATE users SET status = 'banned' WHERE id = ?", args: [userId] });
-        } else if (action === 'make_admin') {
-            await db.execute({ sql: "UPDATE users SET role = 'admin' WHERE id = ?", args: [userId] });
-        } else if (action === 'make_user') {
-            await db.execute({ sql: "UPDATE users SET role = 'user' WHERE id = ?", args: [userId] });
-        }
-        res.json({ success: true });
-    } catch (e) {
-        res.json({ success: false, error: e.message });
-    }
-});
-
-app.get('/admin.html', requiereAdmin, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
-app.get('/', requiereLogin, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
+    console.log(`🌐 Servidor BLESWAR seguro corriendo en el puerto ${PORT}`);
 });
