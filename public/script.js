@@ -1,132 +1,186 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const bossSelect = document.getElementById('bossSelect');
-    const tablaBody = document.getElementById('tablaBody');
-    const subInfo = document.getElementById('subInfo');
-    const btnSonido = document.getElementById('btnSonido');
+const servidores = [
+    "Sv 1", "Sv 2", "Sv 3", "Sv 4", "Sv 5", "Sv 6", "Sv 7", "Sv 8", 
+    "Sv 10", "Sv 11", "Sv 12", "Sv 14", "Sv 15", "Sv 16", "Sv 17", "Sv 19", 
+    "Speed 1", "Speed 2", "Speed 3"
+];
 
-    let datosGlobales = [];
-    let configGlobal = {};
-    let audioHabilitado = false;
+let bossActualIndex = 0;
+let datosGlobales = [];
+let configBosses = [];
+let audioContext = null;
+let alertasDisparadas = {};
 
-    if (btnSonido) {
-        btnSonido.addEventListener('click', () => {
-            audioHabilitado = true;
-            btnSonido.textContent = '🔊 Alertas Sonoras Activas';
-            btnSonido.style.background = '#27ae60';
-        });
+function activarAudio() {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    document.getElementById("btnAudio").innerText = "🔊 Alertas Sonoras Activas";
+    document.getElementById("btnAudio").style.backgroundColor = "#16a34a";
+    reproducirBeep(600, 200);
+}
+
+function reproducirBeep(frecuencia, duracion) {
+    if (!audioContext) return;
+    try {
+        let osc = audioContext.createOscillator();
+        let gain = audioContext.createGain();
+        osc.type = "sine";
+        osc.frequency.value = frecuencia;
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.start();
+        setTimeout(() => { osc.stop(); }, duracion);
+    } catch (e) {
+        console.log("Error reproduciendo audio", e);
     }
+}
 
-    async function cargarDatos() {
-        try {
-            const res = await fetch('/api/bosses');
-            if (res.status === 401) {
-                window.location.href = '/login.html';
-                return;
-            }
-            const data = await res.json();
-
-            if (data.success) {
-                datosGlobales = data.registros;
-                configGlobal = data.configBosses;
-
-                poblarSelectBosses();
-                actualizarTabla();
-            }
-        } catch (e) {
-            console.error("Fallo al cargar datos:", e);
-        }
-    }
-
-    function poblarSelectBosses() {
-        if (!bossSelect) return;
-        const valorActual = bossSelect.value;
-        bossSelect.innerHTML = '';
-
-        let index = 0;
-        Object.keys(configGlobal).forEach(bossName => {
-            const opt = document.createElement('option');
-            opt.value = bossName;
-            opt.textContent = `${bossName} (${Math.round(configGlobal[bossName].respawnMinutes / 60)}h)`;
-            if (bossName === valorActual || (index === 0 && !valorActual)) opt.selected = true;
-            bossSelect.appendChild(opt);
-            index++;
-        });
-    }
-
-    function parsearFechaMegaMu(fechaStr) {
-        if (!fechaStr) return null;
-        const partes = fechaStr.split(/[- :]/);
-        if (partes.length < 6) return new Date(fechaStr);
-        return new Date(partes[0], partes[1] - 1, partes[2], partes[3], partes[4], partes[5]);
-    }
-
-    function actualizarTabla() {
-        if (!tablaBody || !bossSelect) return;
-
-        const bossSeleccionado = bossSelect.value;
-        const config = configGlobal[bossSeleccionado];
-        if (!config) return;
-
-        if (subInfo) {
-            subInfo.textContent = `${bossSeleccionado.toUpperCase()} RESPAWN TRACKER | COOLDOWN ${Math.round(config.respawnMinutes / 60)} HORAS`;
-        }
-
-        const respawnMs = config.respawnMinutes * 60 * 1000;
-        const registrosBoss = datosGlobales.filter(r => r.boss.toLowerCase() === bossSeleccionado.toLowerCase());
-        const serversUnicos = ['Sv 1', 'Sv 2', 'Sv 3', 'Sv 4', 'Sv 5', 'Sv 6', 'Sv 7', 'Sv 8', 'Sv 10', 'Sv 11', 'Sv 12', 'Sv 14', 'Sv 15', 'Sv 16', 'Sv 17', 'Sv 19', 'Speed 1', 'Speed 2', 'Speed 3'];
-
-        tablaBody.innerHTML = '';
-
-        serversUnicos.forEach(sv => {
-            const regSv = registrosBoss.find(r => r.servidor.toLowerCase() === sv.toLowerCase());
+async function cargarDatosServidor() {
+    try {
+        const response = await fetch('/api/bosses');
+        const data = await response.json();
+        if (data.success) {
+            datosGlobales = data.registros;
+            configBosses = data.configBosses;
             
-            let ultimaMuerteText = "Sin datos recientes";
-            let cazadorText = "-";
-            let proximaMuerteTime = null;
-            let tiempoRestanteText = "N/A";
-            let claseTiempo = "";
-
-            if (regSv) {
-                ultimaMuerteText = regSv.fecha;
-                cazadorText = regSv.cazador;
-                const fechaMuerte = parsearFechaMegaMu(regSv.fecha);
-
-                if (fechaMuerte && !isNaN(fechaMuerte)) {
-                    proximaMuerteTime = new Date(fechaMuerte.getTime() + respawnMs);
-                    const msRestantes = proximaMuerteTime.getTime() - new Date().getTime();
-
-                    const opcionesFecha = { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-                    const proximoRespawnEst = proximaMuerteTime.toLocaleString('es-VE', opcionesFecha);
-
-                    if (msRestantes > 0) {
-                        const horas = Math.floor(msRestantes / (1000 * 60 * 60));
-                        const minutos = Math.floor((msRestantes % (1000 * 60 * 60)) / (1000 * 60));
-                        const segundos = Math.floor((msRestantes % (1000 * 60)) / 1000);
-                        tiempoRestanteText = `⏳ ${horas}h ${minutos}m ${segundos}s`;
-                        claseTiempo = "status-tiempo";
-                    } else {
-                        tiempoRestanteText = "🟢 ¡RESPAWN DISPONIBLE!";
-                        claseTiempo = "status-vivo";
-                    }
-                }
+            if(data.user) {
+                document.getElementById("userInfo").innerHTML = `Conectado como: <span>${data.user.username}</span> | Personaje: <span>${data.user.character_nick || 'N/A'}</span>`;
             }
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${sv}</strong></td>
-                <td>${ultimaMuerteText}</td>
-                <td>${cazadorText}</td>
-                <td>${proximaMuerteTime ? proximaMuerteTime.toLocaleString() : 'N/A'}</td>
-                <td class="${claseTiempo}">${tiempoRestanteText}</td>
-            `;
-            tablaBody.appendChild(tr);
+            inicializarSelect();
+            renderTabla();
+        }
+    } catch (e) {
+        console.error("Error al obtener los datos:", e);
+    }
+}
+
+function inicializarSelect() {
+    const select = document.getElementById("bossSelect");
+    if (!select || select.children.length > 0) return;
+    select.innerHTML = "";
+    configBosses.forEach((boss, index) => {
+        let opt = document.createElement("option");
+        opt.value = index;
+        opt.text = `${boss.name} (${boss.intervalo}h)`;
+        select.appendChild(opt);
+    });
+}
+
+function cambiarBoss() {
+    bossActualIndex = document.getElementById("bossSelect").value;
+    renderTabla();
+}
+
+function renderTabla() {
+    if (!configBosses.length) return;
+    const boss = configBosses[bossActualIndex];
+    document.getElementById("subInfo").innerText = `${boss.name.toUpperCase()} RESPAWN TRACKER | COOLDOWN ${boss.intervalo} HORAS`;
+
+    const tbody = document.getElementById("tablaBody");
+    tbody.innerHTML = "";
+
+    servidores.forEach(sv => {
+        let registro = datosGlobales.find(item => {
+            let bossCoincide = item.boss.toLowerCase().includes(boss.name.toLowerCase());
+            let svLimpio = item.servidor.toLowerCase().replace(/\s+/g, '');
+            let svTarget = sv.toLowerCase().replace(/\s+/g, '');
+            return bossCoincide && svLimpio === svTarget;
         });
-    }
 
-    if (bossSelect) {
-        bossSelect.addEventListener('change', actualizarTabla);
-    }
+        let fechaMuerte = registro ? registro.fecha : "Sin datos recientes";
+        let cazador = registro ? registro.cazador : "-";
+        let svKey = sv.replace(/\s+/g, '');
 
-    cargarDatos();
-    setInterval(cargarDatos, 30000);
+        let tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td><strong>${sv}</strong></td>
+            <td id="fecha-${svKey}">${fechaMuerte}</td>
+            <td>${cazador}</td>
+            <td id="respawn-${svKey}">--/-- --:--</td>
+            <td id="tiempo-${svKey}">Calculando...</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    actualizarContadores();
+}
+
+function actualizarContadores() {
+    if (!configBosses.length) return;
+    const boss = configBosses[bossActualIndex];
+    const ahora = new Date();
+
+    servidores.forEach(sv => {
+        let svKey = sv.replace(/\s+/g, '');
+        let fechaTd = document.getElementById(`fecha-${svKey}`);
+        if (!fechaTd) return;
+        let fechaTexto = fechaTd.innerText.trim();
+
+        let respawnTd = document.getElementById(`respawn-${svKey}`);
+        let tiempoTd = document.getElementById(`tiempo-${svKey}`);
+
+        if (fechaTexto === "Sin datos recientes" || !fechaTexto) {
+            if(respawnTd) respawnTd.innerText = "N/A";
+            if(tiempoTd) {
+                tiempoTd.innerText = "N/A";
+                tiempoTd.className = "";
+            }
+            return;
+        }
+
+        let formatoLimpio = fechaTexto.replace(/-/g, '/');
+        let fMuerte = new Date(formatoLimpio);
+
+        if (isNaN(fMuerte.getTime())) {
+            if(respawnTd) respawnTd.innerText = "Formato inválido";
+            if(tiempoTd) tiempoTd.innerText = "Error";
+            return;
+        }
+
+        let fRespawn = new Date(fMuerte.getTime() + (boss.intervalo * 3600000));
+        let diferencia = fRespawn - ahora;
+
+        respawnTd.innerText = fRespawn.toLocaleString('es-VE', { 
+            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' 
+        });
+
+        let idAlertaKey = `${boss.name}-${sv}`;
+
+        if (diferencia <= 0) {
+            let tiempoPasado = Math.abs(diferencia);
+            let hPasadas = Math.floor(tiempoPasado / 3600000);
+            let mPasadas = Math.floor((tiempoPasado % 3600000) / 60000);
+            tiempoTd.innerHTML = `🟢 **¡VIVO!** (+${hPasadas}h ${mPasadas}m)`;
+            tiempoTd.className = "status-vivo";
+        } else {
+            let minutosRestantes = diferencia / 60000;
+            let hRestantes = Math.floor(diferencia / 3600000);
+            let mRestantes = Math.floor((diferencia % 3600000) / 60000);
+            let sRestantes = Math.floor((diferencia % 60000) / 1000);
+
+            if (minutosRestantes > 4.5 && minutosRestantes <= 5.5) {
+                tiempoTd.innerHTML = `⚠️ **¡5 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
+                tiempoTd.className = "alerta-5";
+                if (alertasDisparadas[idAlertaKey] !== '5m') {
+                    reproducirBeep(880, 400);
+                    alertasDisparadas[idAlertaKey] = '5m';
+                }
+            } else if (minutosRestantes > 9.5 && minutosRestantes <= 10.5) {
+                tiempoTd.innerHTML = `🔔 **¡10 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
+                tiempoTd.className = "alerta-10";
+                if (alertasDisparadas[idAlertaKey] !== '10m') {
+                    reproducirBeep(440, 300);
+                    alertasDisparadas[idAlertaKey] = '10m';
+                }
+            } else {
+                tiempoTd.innerHTML = `⏳ ${hRestantes}h ${mRestantes}m ${sRestantes}s`;
+                tiempoTd.className = "status-tiempo";
+            }
+        }
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    cargarDatosServidor();
+    setInterval(actualizarContadores, 1000);
+    setInterval(cargarDatosServidor, 120000);
 });
