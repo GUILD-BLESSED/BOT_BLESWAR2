@@ -64,12 +64,28 @@ app.get('/login.html', (req, res) => res.sendFile(path.join(__dirname, 'public',
 
 app.post('/api/register', async (req, res) => {
     const { username, password, character_nick } = req.body;
-    if (!username || !password || !character_nick) return res.redirect('/login.html?error=empty');
+    if (!username || !password || !character_nick) {
+        return res.redirect('/login.html?error=empty');
+    }
 
     try {
+        // 1. Verificar explícitamente si el usuario ya existe
+        const checkUser = await db.execute({
+            sql: "SELECT username FROM users WHERE username = ?",
+            args: [username]
+        });
+        
+        if (checkUser.rows.length > 0) {
+            return res.redirect('/login.html?error=userexists');
+        }
+
+        // 2. Si no existe, encriptar contraseña y registrar
         const hashedPassword = await bcrypt.hash(password, 10);
-        const countRes = await db.execute("SELECT COUNT(*) as count FROM users");
-        const isFirst = countRes.rows[0].count === 0;
+        const countRes = await db.execute("SELECT COUNT(*) as c FROM users");
+        
+        // Determinar si es el primer usuario de la base de datos
+        const userCount = countRes.rows[0].c || countRes.rows[0]['COUNT(*)'] || 0;
+        const isFirst = userCount === 0;
         
         const status = isFirst ? 'active' : 'pending';
         const role = isFirst ? 'admin' : 'user';
@@ -78,9 +94,11 @@ app.post('/api/register', async (req, res) => {
             sql: "INSERT INTO users (username, password, character_nick, status, role) VALUES (?, ?, ?, ?, ?)",
             args: [username, hashedPassword, character_nick, status, role]
         });
+        
         res.redirect('/login.html?registered=true');
     } catch (error) {
-        res.redirect('/login.html?error=userexists');
+        console.error("Error en registro:", error);
+        res.redirect('/login.html?error=error'); // Error general para no confundir con "ya existe"
     }
 });
 
