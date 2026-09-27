@@ -14,7 +14,8 @@
         h1 { color: var(--accent); margin-bottom: 5px; letter-spacing: 2px; }
         .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px; }
         .controls { margin-bottom: 20px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; align-items: center; }
-        select, button { padding: 10px 15px; background-color: var(--header-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; outline: none; cursor: pointer; }
+        select, button, input[type="text"] { padding: 10px 15px; background-color: var(--header-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; outline: none; }
+        select, button { cursor: pointer; }
         .btn-audio { background-color: #0369a1; font-weight: bold; }
         .table-container { max-width: 1100px; margin: 0 auto 30px auto; background-color: var(--table-bg); border-radius: 10px; overflow-x: auto; border: 1px solid var(--border-color); }
         table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
@@ -26,6 +27,18 @@
         .alerta-10 { color: var(--warning); font-weight: bold; animation: parpadeo 1s infinite; }
         .alerta-5 { color: var(--danger); font-weight: bold; animation: parpadeo 0.5s infinite; }
         @keyframes parpadeo { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        
+        /* ESTILOS DEL CHAT EN TIEMPO REAL */
+        .chat-container { max-width: 1100px; margin: 30px auto; background-color: var(--table-bg); border-radius: 10px; border: 1px solid var(--border-color); padding: 15px; text-align: left; }
+        .chat-title { color: var(--accent); font-size: 1rem; text-transform: uppercase; margin-bottom: 10px; font-weight: bold; text-align: center; letter-spacing: 1px; }
+        .chat-messages { height: 220px; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 0.88rem; display: flex; flex-direction: column; gap: 6px; }
+        .chat-message-item { background: rgba(27, 42, 74, 0.5); padding: 6px 10px; border-radius: 4px; border-left: 3px solid var(--accent); word-break: break-all; }
+        .chat-nick { color: var(--accent); font-weight: bold; }
+        .chat-input-area { display: flex; gap: 10px; }
+        .chat-input-area input { flex: 1; background: var(--bg-color); border: 1px solid var(--border-color); color: #fff; padding: 10px; border-radius: 6px; }
+        .chat-input-area button { background: #0369a1; font-weight: bold; padding: 10px 20px; }
+        .chat-input-area button:hover { background: #0284c7; }
+
         footer { margin-top: 30px; color: var(--text-muted); font-size: 0.85rem; padding-bottom: 20px; }
         .top10-title { color: #f59e0b; margin-top: 40px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
     </style>
@@ -64,6 +77,18 @@
         </table>
     </div>
 
+    <!-- SECCIÓN DE CHAT EN TIEMPO REAL -->
+    <div class="chat-container">
+        <div class="chat-title">💬 Chat de la Guild en Tiempo Real</div>
+        <div id="chatMessages" class="chat-messages">
+            <div style="color: #94a3b8; text-align: center; margin-top: 80px;">Conectando al chat...</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="Escribe un mensaje..." autocomplete="off" onkeypress="handleKeyPress(event)">
+            <button onclick="enviarMensaje()">Enviar</button>
+        </div>
+    </div>
+
     <!-- SECCIÓN TOP 10 -->
     <h2 class="top10-title">🔥 Top 10 Bosses más cercanos 🔥</h2>
     <div class="table-container">
@@ -83,6 +108,8 @@
 
     <footer>Copyright © - Página Web Desarrollada por Myzor y Aravigel</footer>
 
+    <!-- Socket.io cliente automático -->
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
