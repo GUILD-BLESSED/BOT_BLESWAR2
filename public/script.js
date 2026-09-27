@@ -28,9 +28,7 @@ function reproducirBeep(frecuencia, duracion) {
         gain.connect(audioContext.destination);
         osc.start();
         setTimeout(() => { osc.stop(); }, duracion);
-    } catch (e) {
-        console.log("Error reproduciendo audio", e);
-    }
+    } catch (e) { console.log(e); }
 }
 
 async function cargarDatosServidor() {
@@ -80,23 +78,17 @@ function renderTabla() {
 
     servidores.forEach(sv => {
         let registro = datosGlobales.find(item => {
-            let bossCoincide = item.boss.toLowerCase().includes(boss.name.toLowerCase());
-            let svLimpio = item.servidor.toLowerCase().replace(/\s+/g, '');
-            let svTarget = sv.toLowerCase().replace(/\s+/g, '');
-            return bossCoincide && svLimpio === svTarget;
+            return item.boss.toLowerCase().includes(boss.name.toLowerCase()) && 
+                   item.servidor.toLowerCase().replace(/\s+/g, '') === sv.toLowerCase().replace(/\s+/g, '');
         });
-
-        let fechaMuerte = registro ? registro.fecha : "Sin datos recientes";
-        let cazador = registro ? registro.cazador : "-";
-        let svKey = sv.replace(/\s+/g, '');
 
         let tr = document.createElement("tr");
         tr.innerHTML = `
             <td><strong>${sv}</strong></td>
-            <td id="fecha-${svKey}">${fechaMuerte}</td>
-            <td>${cazador}</td>
-            <td id="respawn-${svKey}">--/-- --:--</td>
-            <td id="tiempo-${svKey}">Calculando...</td>
+            <td id="fecha-${sv.replace(/\s+/g, '')}">${registro ? registro.fecha : "Sin datos"}</td>
+            <td>${registro ? registro.cazador : "-"}</td>
+            <td id="respawn-${sv.replace(/\s+/g, '')}">--/-- --:--</td>
+            <td id="tiempo-${sv.replace(/\s+/g, '')}">Calculando...</td>
         `;
         tbody.appendChild(tr);
     });
@@ -106,77 +98,96 @@ function renderTabla() {
 
 function actualizarContadores() {
     if (!configBosses.length) return;
-    const boss = configBosses[bossActualIndex];
     const ahora = new Date();
+    let top10Lista = [];
 
+    // 1. Actualizar tabla principal del boss seleccionado
+    const bossActual = configBosses[bossActualIndex];
     servidores.forEach(sv => {
         let svKey = sv.replace(/\s+/g, '');
         let fechaTd = document.getElementById(`fecha-${svKey}`);
         if (!fechaTd) return;
         let fechaTexto = fechaTd.innerText.trim();
-
         let respawnTd = document.getElementById(`respawn-${svKey}`);
         let tiempoTd = document.getElementById(`tiempo-${svKey}`);
 
-        if (fechaTexto === "Sin datos recientes" || !fechaTexto) {
+        if (fechaTexto === "Sin datos") {
             if(respawnTd) respawnTd.innerText = "N/A";
-            if(tiempoTd) {
-                tiempoTd.innerText = "N/A";
-                tiempoTd.className = "";
-            }
+            if(tiempoTd) { tiempoTd.innerText = "N/A"; tiempoTd.className = ""; }
             return;
         }
 
-        let formatoLimpio = fechaTexto.replace(/-/g, '/');
-        let fMuerte = new Date(formatoLimpio);
+        let fMuerte = new Date(fechaTexto.replace(/-/g, '/'));
+        if (isNaN(fMuerte.getTime())) return;
 
-        if (isNaN(fMuerte.getTime())) {
-            if(respawnTd) respawnTd.innerText = "Formato inválido";
-            if(tiempoTd) tiempoTd.innerText = "Error";
-            return;
-        }
-
-        let fRespawn = new Date(fMuerte.getTime() + (boss.intervalo * 3600000));
+        let fRespawn = new Date(fMuerte.getTime() + (bossActual.intervalo * 3600000));
         let diferencia = fRespawn - ahora;
 
-        respawnTd.innerText = fRespawn.toLocaleString('es-VE', { 
-            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' 
-        });
-
-        let idAlertaKey = `${boss.name}-${sv}`;
+        respawnTd.innerText = fRespawn.toLocaleString('es-VE', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
         if (diferencia <= 0) {
-            let tiempoPasado = Math.abs(diferencia);
-            let hPasadas = Math.floor(tiempoPasado / 3600000);
-            let mPasadas = Math.floor((tiempoPasado % 3600000) / 60000);
-            tiempoTd.innerHTML = `🟢 **¡VIVO!** (+${hPasadas}h ${mPasadas}m)`;
+            tiempoTd.innerHTML = `🟢 **¡VIVO!**`;
             tiempoTd.className = "status-vivo";
         } else {
-            let minutosRestantes = diferencia / 60000;
-            let hRestantes = Math.floor(diferencia / 3600000);
             let mRestantes = Math.floor((diferencia % 3600000) / 60000);
             let sRestantes = Math.floor((diferencia % 60000) / 1000);
+            let hRestantes = Math.floor(diferencia / 3600000);
+            let idAlerta = `${bossActual.name}-${sv}`;
 
-            if (minutosRestantes > 4.5 && minutosRestantes <= 5.5) {
+            if ((diferencia / 60000) > 4.5 && (diferencia / 60000) <= 5.5) {
                 tiempoTd.innerHTML = `⚠️ **¡5 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
                 tiempoTd.className = "alerta-5";
-                if (alertasDisparadas[idAlertaKey] !== '5m') {
-                    reproducirBeep(880, 400);
-                    alertasDisparadas[idAlertaKey] = '5m';
-                }
-            } else if (minutosRestantes > 9.5 && minutosRestantes <= 10.5) {
+                if(alertasDisparadas[idAlerta] !== '5m') { reproducirBeep(880, 400); alertasDisparadas[idAlerta] = '5m'; }
+            } else if ((diferencia / 60000) > 9.5 && (diferencia / 60000) <= 10.5) {
                 tiempoTd.innerHTML = `🔔 **¡10 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
                 tiempoTd.className = "alerta-10";
-                if (alertasDisparadas[idAlertaKey] !== '10m') {
-                    reproducirBeep(440, 300);
-                    alertasDisparadas[idAlertaKey] = '10m';
-                }
+                if(alertasDisparadas[idAlerta] !== '10m') { reproducirBeep(440, 300); alertasDisparadas[idAlerta] = '10m'; }
             } else {
                 tiempoTd.innerHTML = `⏳ ${hRestantes}h ${mRestantes}m ${sRestantes}s`;
                 tiempoTd.className = "status-tiempo";
             }
         }
     });
+
+    // 2. Calcular Top 10 de TODOS los bosses
+    configBosses.forEach(boss => {
+        servidores.forEach(sv => {
+            let registro = datosGlobales.find(item => item.boss.toLowerCase().includes(boss.name.toLowerCase()) && item.servidor.toLowerCase().replace(/\s+/g, '') === sv.toLowerCase().replace(/\s+/g, ''));
+            if(registro && registro.fecha) {
+                let fMuerte = new Date(registro.fecha.replace(/-/g, '/'));
+                if(!isNaN(fMuerte.getTime())) {
+                    let diferencia = (fMuerte.getTime() + (boss.intervalo * 3600000)) - ahora;
+                    let displayHTML = "";
+                    let cls = "";
+                    if(diferencia <= 0) {
+                        displayHTML = "🟢 ¡VIVO!";
+                        cls = "status-vivo";
+                    } else {
+                        let h = Math.floor(diferencia / 3600000);
+                        let m = Math.floor((diferencia % 3600000) / 60000);
+                        let s = Math.floor((diferencia % 60000) / 1000);
+                        displayHTML = `⏳ ${h}h ${m}m ${s}s`;
+                        cls = (diferencia / 60000) <= 10 ? "alerta-10" : "status-tiempo";
+                    }
+                    top10Lista.push({ name: boss.name, sv: sv, dif: diferencia, html: displayHTML, cls: cls });
+                }
+            }
+        });
+    });
+
+    // Ordenar Top 10 (Vivos primero, luego los más cercanos)
+    top10Lista.sort((a, b) => a.dif - b.dif);
+    let top10Final = top10Lista.slice(0, 10);
+    
+    const t10Body = document.getElementById("top10Body");
+    if(t10Body) {
+        t10Body.innerHTML = "";
+        top10Final.forEach(b => {
+            let tr = document.createElement("tr");
+            tr.innerHTML = `<td><strong>${b.name}</strong></td><td>${b.sv}</td><td class="${b.cls}">${b.html}</td>`;
+            t10Body.appendChild(tr);
+        });
+    }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
