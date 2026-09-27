@@ -11,11 +11,12 @@
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
         th, td { padding: 10px; border-bottom: 1px solid #233b63; text-align: center; }
         th { background: #1b2a4a; color: #38bdf8; }
-        button { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .btn-activar { background: #22c55e; color: #fff; }
-        .btn-ban { background: #ef4444; color: #fff; }
+        select { background: #1b2a4a; color: #fff; border: 1px solid #38bdf8; padding: 5px; border-radius: 4px; outline: none; }
+        button { padding: 5px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; background: #0369a1; color: white; margin-left: 10px; }
+        button:hover { background: #0284c7; }
         .nav-links { margin-bottom: 20px; display: flex; justify-content: space-between; }
         a { color: #38bdf8; text-decoration: none; font-weight: bold; }
+        footer { margin-top: 30px; color: #94a3b8; font-size: 0.75rem; }
     </style>
 </head>
 <body>
@@ -24,15 +25,15 @@
             <a href="/">👈 Ir al Boss Tracker</a>
             <a href="/api/logout">Cerrar Sesión</a>
         </div>
-        <h2>Panel de Administración de Usuarios</h2>
+        <h2>Gestión Avanzada de Usuarios</h2>
         <table>
             <thead>
                 <tr>
                     <th>Usuario</th>
-                    <th>Nick del Personaje</th>
+                    <th>Nick</th>
                     <th>Rol</th>
                     <th>Estado</th>
-                    <th>Acciones</th>
+                    <th>Acción</th>
                 </tr>
             </thead>
             <tbody id="tablaUsuarios">
@@ -40,32 +41,55 @@
             </tbody>
         </table>
     </div>
+    <footer>Página Web Desarrollada por Myzor y Aravigel</footer>
 
     <script>
+        let currentUser = "";
         async function cargarUsuarios() {
             const res = await fetch('/api/admin/users');
             const data = await res.json();
             if(data.success) {
+                currentUser = data.currentUser;
                 const tbody = document.getElementById("tablaUsuarios");
                 tbody.innerHTML = "";
                 data.users.forEach(u => {
                     let tr = document.createElement("tr");
-                    let acciones = u.role === 'admin' ? '<span>Administrador</span>' : `
-                        ${u.status !== 'active' ? `<button class="btn-activar" onclick="cambiarEstado(${u.id}, 'active')">Aprobar</button>` : ''}
-                        ${u.status !== 'banned' ? `<button class="btn-ban" onclick="cambiarEstado(${u.id}, 'banned')">Banear</button>` : ''}
-                    `;
-                    tr.innerHTML = `<td>${u.username}</td><td><b>${u.character_nick || '-'}</b></td><td>${u.role}</td><td><b>${u.status}</b></td><td>${acciones}</td>`;
+                    if(u.username === currentUser) {
+                        tr.innerHTML = `<td>${u.username}</td><td><b>${u.character_nick || '-'}</b></td><td>${u.role}</td><td><b>${u.status}</b></td><td>Tú (Admin)</td>`;
+                    } else {
+                        tr.innerHTML = `
+                            <td>${u.username}</td>
+                            <td><b>${u.character_nick || '-'}</b></td>
+                            <td>
+                                <select id="role-${u.id}">
+                                    <option value="user" ${u.role==='user'?'selected':''}>Usuario</option>
+                                    <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="status-${u.id}">
+                                    <option value="pending" ${u.status==='pending'?'selected':''}>Pendiente</option>
+                                    <option value="active" ${u.status==='active'?'selected':''}>Activo (Autorizado)</option>
+                                    <option value="banned" ${u.status==='banned'?'selected':''}>Baneado</option>
+                                </select>
+                            </td>
+                            <td><button onclick="guardarCambios(${u.id})">Guardar</button></td>
+                        `;
+                    }
                     tbody.appendChild(tr);
                 });
             }
         }
 
-        async function cambiarEstado(userId, status) {
+        async function guardarCambios(userId) {
+            const status = document.getElementById(`status-${userId}`).value;
+            const role = document.getElementById(`role-${userId}`).value;
             await fetch('/api/admin/update-status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, status })
+                body: JSON.stringify({ userId, status, role })
             });
+            alert("Cambios guardados");
             cargarUsuarios();
         }
 
