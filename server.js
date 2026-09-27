@@ -2,31 +2,39 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const { createClient } = require('@libsql/client');
 const configBosses = require('./bosses.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de la Base de Datos SQLite local
-const db = new sqlite3.Database('./database.sqlite', (err) => {
-    if (err) console.error("Error abriendo la base de datos", err.message);
-    else console.log("📦 Base de datos conectada correctamente.");
+// Configuración de Turso en la nube (con respaldo local por si acaso)
+const db = createClient({
+    url: process.env.TURSO_DATABASE_URL || "file:database.sqlite",
+    authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// Crear tabla de usuarios
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        nickname TEXT,
-        password TEXT,
-        status TEXT DEFAULT 'pending',
-        role TEXT DEFAULT 'user'
-    )`);
-});
+// Inicializar tablas en Turso de forma asíncrona
+async function initDB() {
+    try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                nickname TEXT,
+                password TEXT,
+                status TEXT DEFAULT 'pending',
+                role TEXT DEFAULT 'user'
+            )
+        `);
+        console.log("📦 Base de datos conectada y sincronizada en Turso correctamente.");
+    } catch (err) {
+        console.error("Error inicializando la base de datos:", err);
+    }
+}
+initDB();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -59,27 +67,37 @@ app.get('/login.html', (req, res) => {
 });
 
 app.post('/api/register', async (req, res) => {
-    const { username, nickname, password } = req.body;
-    if (!username || !nickname || !password) return res.redirect('/login.html?error=empty');
+    try {
+        const { username, nickname, password } = req.body;
+        if (!username || !nickname || !password) return res.redirect('/login.html?error=empty');
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-    db.get(`SELECT COUNT(*) as count FROM users`, async (err, row) => {
-        const isFirst = row.count === 0;
+        const countResult = await db.execute(`SELECT COUNT(*) as count FROM users`);
+        const isFirst = countResult.rows[0].count === 0;
         const status = isFirst ? 'active' : 'pending';
         const role = isFirst ? 'admin' : 'user';
 
-        db.run(`INSERT INTO users (username, nickname, password, status, role) VALUES (?, ?, ?, ?, ?)`, 
-            [username, nickname, hashedPassword, status, role], (err) => {
-            if (err) return res.redirect('/login.html?error=userexists');
-            res.redirect('/login.html?registered=true');
+        await db.execute({
+            sql: `INSERT INTO users (username, nickname, password, status, role) VALUES (?, ?, ?, ?, ?)`,
+            args: [username, nickname, hashedPassword, status, role]
         });
-    });
+
+        res.redirect('/login.html?registered=true');
+    } catch (err) {
+        res.redirect('/login.html?error=userexists');
+    }
 });
 
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const result = await db.execute({
+            sql: `SELECT * FROM users WHERE username = ?`,
+            args: [username]
+        });
+
+        const user = result.rows[0];
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return res.redirect('/login.html?error=invalid');
         }
@@ -89,7 +107,9 @@ app.post('/api/login', (req, res) => {
         req.session.user = { id: user.id, username: user.username, nickname: user.nickname, role: user.role, status: user.status };
         if (user.role === 'admin') res.redirect('/admin.html');
         else res.redirect('/');
-    });
+    } catch (err) {
+        res.redirect('/login.html?error=invalid');
+    }
 });
 
 app.get('/api/logout', (req, res) => {
@@ -113,29 +133,40 @@ app.get('/', (req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Administración de usuarios
-app.get('/api/admin/users', requiereAdminAPI, (req, res) => {
-    db.all(`SELECT id, username, nickname, status, role FROM users`, [], (err, rows) => {
-        if (err) return res.status(500).json({ success: false });
-        res.json({ success: true, users: rows, currentUser: req.session.user.username });
-    });
+// Administración de usuarios en Turso
+app.get('/api/admin/users', requiereAdminAPI, async (req, res) => {
+    try {
+        const result = await db.execute(`SELECT id, username, nickname, status, role FROM users`);
+        res.json({ success: true, users: result.rows, currentUser: req.session.user.username });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
 });
 
-app.post('/api/admin/update-status', requiereAdminAPI, (req, res) => {
-    const { userId, status } = req.body;
-    db.run(`UPDATE users SET status = ? WHERE id = ?`, [status, userId], function(err) {
-        if (err) return res.status(500).json({ success: false });
+app.post('/api/admin/update-status', requiereAdminAPI, async (req, res) => {
+    try {
+        const { userId, status } = req.body;
+        await db.execute({
+            sql: `UPDATE users SET status = ? WHERE id = ?`,
+            args: [status, userId]
+        });
         res.json({ success: true });
-    });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
 });
 
-// Nueva ruta para alternar el rol (admin / user)
-app.post('/api/admin/update-role', requiereAdminAPI, (req, res) => {
-    const { userId, role } = req.body;
-    db.run(`UPDATE users SET role = ? WHERE id = ?`, [role, userId], function(err) {
-        if (err) return res.status(500).json({ success: false });
+app.post('/api/admin/update-role', requiereAdminAPI, async (req, res) => {
+    try {
+        const { userId, role } = req.body;
+        await db.execute({
+            sql: `UPDATE users SET role = ? WHERE id = ?`,
+            args: [role, userId]
+        });
         res.json({ success: true });
-    });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
 });
 
 app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
@@ -166,3 +197,4 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
 app.listen(PORT, () => {
     console.log(`🌐 Servidor BLESWAR seguro corriendo en el puerto ${PORT}`);
 });
+            
