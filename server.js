@@ -13,12 +13,13 @@ const PORT = process.env.PORT || 3000;
 
 // Configuración de la Base de Datos en Turso
 const db = createClient({
-    url: process.env.TURSO_DATABASE_URL,
-    authToken: process.env.TURSO_AUTH_TOKEN,
+    url: process.env.TURSO_DATABASE_URL || '',
+    authToken: process.env.TURSO_AUTH_TOKEN || '',
 });
 
 async function initDB() {
     try {
+        // 1. Crear la tabla en Turso si no existe
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,9 +30,25 @@ async function initDB() {
                 role TEXT DEFAULT 'user'
             )
         `);
-        console.log("☁️ Base de datos Turso conectada y tabla verificada.");
+
+        // 2. Migración automática: Si la tabla ya existía sin estas columnas, las añade sin borrar datos
+        const columnasAñadir = [
+            'character_nick TEXT',
+            'status TEXT DEFAULT "pending"',
+            'role TEXT DEFAULT "user"'
+        ];
+
+        for (const col of columnasAñadir) {
+            try {
+                await db.execute(`ALTER TABLE users ADD COLUMN ${col}`);
+            } catch (err) {
+                // Si la columna ya existe en Turso, se ignora el error
+            }
+        }
+
+        console.log("☁️ Base de datos Turso conectada y esquema actualizado con éxito.");
     } catch (e) {
-        console.error("Error conectando a Turso:", e.message);
+        console.error("❌ Error inicializando Turso:", e.message);
     }
 }
 initDB();
@@ -69,53 +86,89 @@ app.post('/api/register', async (req, res) => {
     }
 
     try {
-        // 1. Verificar explícitamente si el usuario ya existe
+        const uClean = username.trim();
+        const pClean = password.trim();
+        const nickClean = character_nick.trim();
+
+        // Verificar si el usuario ya existe
         const checkUser = await db.execute({
             sql: "SELECT username FROM users WHERE username = ?",
-            args: [username]
+            args: [uClean]
         });
         
-        if (checkUser.rows.length > 0) {
+        if (checkUser.rows && checkUser.rows.length > 0) {
             return res.redirect('/login.html?error=userexists');
         }
 
-        // 2. Si no existe, encriptar contraseña y registrar
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const countRes = await db.execute("SELECT COUNT(*) as c FROM users");
-        
-        // Determinar si es el primer usuario de la base de datos
-        const userCount = countRes.rows[0].c || countRes.rows[0]['COUNT(*)'] || 0;
-        const isFirst = userCount === 0;
-        
+        // Contar número de usuarios para asignar Admin al primero
+        const countRes = await db.execute("SELECT COUNT(*) as count FROM users");
+        let totalUsers = 0;
+        if (countRes.rows && countRes.rows.length > 0) {
+            const firstRow = countRes.rows[0];
+            totalUsers = Number(firstRow.count ?? firstRow[0] ?? 0);
+        }
+
+        const isFirst = totalUsers === 0;
         const status = isFirst ? 'active' : 'pending';
         const role = isFirst ? 'admin' : 'user';
 
+        const hashedPassword = await bcrypt.hash(pClean, 10);
+
         await db.execute({
             sql: "INSERT INTO users (username, password, character_nick, status, role) VALUES (?, ?, ?, ?, ?)",
-            args: [username, hashedPassword, character_nick, status, role]
+            args: [uClean, hashedPassword, nickClean, status, role]
         });
         
         res.redirect('/login.html?registered=true');
     } catch (error) {
-        console.error("Error en registro:", error);
-        res.redirect('/login.html?error=error'); // Error general para no confundir con "ya existe"
+        console.error("❌ Error en registro:", error);
+        res.redirect('/login.html?error=error');
     }
 });
 
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
+    if (!username || !password) return res.redirect('/login.html?error=invalid');
+
     try {
-        const result = await db.execute({ sql: "SELECT * FROM users WHERE username = ?", args: [username] });
+        const uClean = username.trim();
+        const result = await db.execute({ 
+            sql: "SELECT * FROM users WHERE username = ?", 
+            args: [uClean] 
+        });
+
+        if (!result.rows || result.rows.length === 0) {
+            return res.redirect('/login.html?error=invalid');
+        }
+
         const user = result.rows[0];
+        const dbPassword = user.password;
+        const dbStatus = user.status || 'pending';
+        const dbRole = user.role || 'user';
+        const dbId = user.id;
+        const dbUsername = user.username;
+        const dbNick = user.character_nick || '';
 
-        if (!user || !(await bcrypt.compare(password, user.password))) return res.redirect('/login.html?error=invalid');
-        if (user.status === 'banned') return res.redirect('/login.html?error=banned');
-        if (user.status === 'pending') return res.redirect('/login.html?error=pending');
+        const passwordMatch = await bcrypt.compare(password.trim(), dbPassword);
+        if (!passwordMatch) {
+            return res.redirect('/login.html?error=invalid');
+        }
 
-        req.session.user = { id: user.id, username: user.username, character_nick: user.character_nick, role: user.role, status: user.status };
-        if (user.role === 'admin') res.redirect('/admin.html');
+        if (dbStatus === 'banned') return res.redirect('/login.html?error=banned');
+        if (dbStatus === 'pending') return res.redirect('/login.html?error=pending');
+
+        req.session.user = { 
+            id: dbId, 
+            username: dbUsername, 
+            character_nick: dbNick, 
+            role: dbRole, 
+            status: dbStatus 
+        };
+
+        if (dbRole === 'admin') res.redirect('/admin.html');
         else res.redirect('/');
     } catch (e) {
+        console.error("❌ Error en login:", e);
         res.redirect('/login.html?error=error');
     }
 });
@@ -142,6 +195,7 @@ app.get('/api/admin/users', requiereAdminAPI, async (req, res) => {
         const result = await db.execute("SELECT id, username, character_nick, status, role FROM users");
         res.json({ success: true, users: result.rows, currentUser: req.session.user.username });
     } catch (e) {
+        console.error("❌ Error cargando usuarios en admin:", e);
         res.status(500).json({ success: false });
     }
 });
@@ -155,6 +209,7 @@ app.post('/api/admin/update-status', requiereAdminAPI, async (req, res) => {
         });
         res.json({ success: true });
     } catch (e) {
+        console.error("❌ Error actualizando status:", e);
         res.status(500).json({ success: false });
     }
 });
@@ -179,8 +234,9 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
         });
         res.json({ success: true, registros, configBosses, user: req.session.user });
     } catch (error) {
+        console.error("❌ Error conectando con MegaMu:", error);
         res.status(500).json({ success: false, error: "Error conectando con MegaMu" });
     }
 });
 
-app.listen(PORT, () => console.log(`🌐 Servidor BLESWAR seguro corriendo en el puerto ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 Servidor BLESWAR corriendo en el puerto ${PORT}`));
