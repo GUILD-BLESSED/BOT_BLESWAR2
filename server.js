@@ -224,15 +224,17 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
         $('table tr, tbody tr').each((i, row) => {
             const cols = $(row).find('td');
             if (cols.length >= 4) {
-                let fechaCruda = cols.eq(0).text().trim();
-                // Forzar zona horaria de Brasil (-03:00) para alinear con el reloj oficial de MegaMu
-                let fechaConTZ = fechaCruda;
-                if (fechaCruda && fechaCruda.includes('-') && !fechaCruda.includes('+') && !fechaCruda.endsWith('Z')) {
-                    fechaConTZ = fechaCruda.replace(' ', 'T') + '-03:00';
+                const fechaLimpia = cols.eq(0).text().trim(); // Se mantiene intacta para que se vea bien en la tabla
+                
+                // Creamos un campo auxiliar 'fechaISO' con la zona horaria de Brasil (-03:00) exclusivamente para cálculos
+                let fechaISO = fechaLimpia;
+                if (fechaLimpia && fechaLimpia.includes('-') && !fechaLimpia.includes('+') && !fechaLimpia.endsWith('Z')) {
+                    fechaISO = fechaLimpia.replace(' ', 'T') + '-03:00';
                 }
 
                 registros.push({
-                    fecha: fechaConTZ,
+                    fecha: fechaLimpia,  // Lo que ve el usuario (ej: 2026-09-27 11:14)
+                    fechaISO: fechaISO,  // Para que tu frontend haga las cuentas matemáticas exactas
                     boss: cols.eq(1).text().trim(),
                     cazador: cols.eq(2).text().trim(),
                     servidor: cols.eq(3).text().trim()
