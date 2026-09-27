@@ -1,11 +1,11 @@
 [
-  { "name": "Selupan", "intervalo": 37, "mapa": "Raklion Hatchery" },
-  { "name": "Nightmare", "intervalo": 43.75, "mapa": "Kanturu" },
-  { "name": "Nix", "intervalo": 104.50, "mapa": "Nixies Lake" },
-  { "name": "Lord Silvester", "intervalo": 96, "mapa": "Uruk Mountain" },
-  { "name": "Lord Of Ferea", "intervalo": 85, "mapa": "Ferea" },
-  { "name": "Core Magriffy", "intervalo": 87.66, "mapa": "Nars" },
-  { "name": "God Of Darkness", "intervalo": 118, "mapa": "Swamp Of Darkness" },
+  { "name": "Selupan", "intervalo": 34, "mapa": "Raklion Hatchery" },
+  { "name": "Nightmare", "intervalo": 40, "mapa": "Kanturu" },
+  { "name": "Nix", "intervalo": 100, "mapa": "Nixies Lake" },
+  { "name": "Lord Silvester", "intervalo": 90, "mapa": "Uruk Mountain" },
+  { "name": "Lord Of Ferea", "intervalo": 108, "mapa": "Ferea" },
+  { "name": "Core Magriffy", "intervalo": 100, "mapa": "Nars" },
+  { "name": "God Of Darkness", "intervalo": 128, "mapa": "Swamp Of Darkness" },
   { "name": "Kundun", "intervalo": 24, "mapa": "Kalima 7" },
   { "name": "Medusa", "intervalo": 12, "mapa": "Swamp of Peace" }
 ]
