@@ -7,14 +7,13 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #0b1329; color: #fff; padding: 20px; text-align: center; }
         h2 { color: #38bdf8; }
-        .container { max-width: 950px; margin: 0 auto; background: #111e38; padding: 20px; border-radius: 10px; border: 1px solid #233b63; }
+        .container { max-width: 900px; margin: 0 auto; background: #111e38; padding: 20px; border-radius: 10px; border: 1px solid #233b63; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
         th, td { padding: 10px; border-bottom: 1px solid #233b63; text-align: center; }
         th { background: #1b2a4a; color: #38bdf8; }
-        button { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; }
+        button { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
         .btn-activar { background: #22c55e; color: #fff; }
         .btn-ban { background: #ef4444; color: #fff; }
-        .btn-rol { background: #0284c7; color: #fff; }
         .nav-links { margin-bottom: 20px; display: flex; justify-content: space-between; }
         a { color: #38bdf8; text-decoration: none; font-weight: bold; }
     </style>
@@ -30,15 +29,14 @@
             <thead>
                 <tr>
                     <th>Usuario</th>
-                    <th>Nick en Juego</th>
-                    <th>Rol Actual</th>
+                    <th>Nick del Personaje</th>
+                    <th>Rol</th>
                     <th>Estado</th>
-                    <th>Acciones de Estado</th>
-                    <th>Acciones de Rol</th>
+                    <th>Acciones</th>
                 </tr>
             </thead>
             <tbody id="tablaUsuarios">
-                <tr><td colspan="6">Cargando usuarios...</td></tr>
+                <tr><td colspan="5">Cargando usuarios...</td></tr>
             </tbody>
         </table>
     </div>
@@ -52,15 +50,11 @@
                 tbody.innerHTML = "";
                 data.users.forEach(u => {
                     let tr = document.createElement("tr");
-                    
-                    let btnEstado = u.status !== 'active' ? `<button class="btn-activar" onclick="cambiarEstado(${u.id}, 'active')">Aprobar</button>` : '';
-                    if(u.status !== 'banned') btnEstado += `<button class="btn-ban" onclick="cambiarEstado(${u.id}, 'banned')">Banear</button>`;
-
-                    let nuevoRol = u.role === 'admin' ? 'user' : 'admin';
-                    let textoRol = u.role === 'admin' ? '👑 Admin' : '👤 Usuario';
-                    let btnRol = `<button class="btn-rol" onclick="cambiarRol(${u.id}, '${nuevoRol}')">Hacer ${nuevoRol === 'admin' ? 'Admin' : 'Usuario'}</button>`;
-
-                    tr.innerHTML = `<td>${u.username}</td><td><b>${u.nickname || 'N/A'}</b></td><td>${textoRol}</td><td><b>${u.status}</b></td><td>${btnEstado}</td><td>${btnRol}</td>`;
+                    let acciones = u.role === 'admin' ? '<span>Administrador</span>' : `
+                        ${u.status !== 'active' ? `<button class="btn-activar" onclick="cambiarEstado(${u.id}, 'active')">Aprobar</button>` : ''}
+                        ${u.status !== 'banned' ? `<button class="btn-ban" onclick="cambiarEstado(${u.id}, 'banned')">Banear</button>` : ''}
+                    `;
+                    tr.innerHTML = `<td>${u.username}</td><td><b>${u.character_nick || '-'}</b></td><td>${u.role}</td><td><b>${u.status}</b></td><td>${acciones}</td>`;
                     tbody.appendChild(tr);
                 });
             }
@@ -71,15 +65,6 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId, status })
-            });
-            cargarUsuarios();
-        }
-
-        async function cambiarRol(userId, role) {
-            await fetch('/api/admin/update-role', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, role })
             });
             cargarUsuarios();
         }
