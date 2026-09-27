@@ -1,185 +1,198 @@
-const servidores = [
-    "Sv 1", "Sv 2", "Sv 3", "Sv 4", "Sv 5", "Sv 6", "Sv 7", "Sv 8", 
-    "Sv 10", "Sv 11", "Sv 12", "Sv 14", "Sv 15", "Sv 16", "Sv 17", "Sv 19", 
-    "Speed 1", "Speed 2", "Speed 3"
-];
-
-let bossActualIndex = 0;
 let datosGlobales = [];
-let configBosses = [];
-let audioContext = null;
-let alertasDisparadas = {}; // Evita que el sonido se repita segundo a segundo en el mismo minuto
+let configBossesGlobal = {};
+let audioActivado = false;
+let audioAlerta = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
 
-function activarAudio() {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    document.getElementById("btnAudio").innerText = "🔊 Alertas Sonoras Activas";
-    document.getElementById("btnAudio").style.backgroundColor = "#16a34a";
-    reproducirBeep(600, 200);
-}
-
-function reproducirBeep(frecuencia, duracion) {
-    if (!audioContext) return;
+async function cargarDatos() {
     try {
-        let osc = audioContext.createOscillator();
-        let gain = audioContext.createGain();
-        osc.type = "sine";
-        osc.frequency.value = frecuencia;
-        osc.connect(gain);
-        gain.connect(audioContext.destination);
-        osc.start();
-        setTimeout(() => { osc.stop(); }, duracion);
-    } catch (e) {
-        console.log("Error reproduciendo audio", e);
-    }
-}
-
-async function cargarDatosServidor() {
-    try {
-        const response = await fetch('/api/bosses');
-        const data = await response.json();
-        if (data.success) {
+        const res = await fetch('/api/bosses');
+        const data = await res.json();
+        
+        if(data.success) {
             datosGlobales = data.registros;
-            configBosses = data.configBosses;
-            inicializarSelect();
-            renderTabla();
-        }
-    } catch (e) {
-        console.error("Error al obtener los datos:", e);
-    }
-}
+            configBossesGlobal = data.configBosses;
 
-function inicializarSelect() {
-    const select = document.getElementById("bossSelect");
-    if (!select || select.children.length > 0) return;
-    select.innerHTML = "";
-    configBosses.forEach((boss, index) => {
-        let opt = document.createElement("option");
-        opt.value = index;
-        opt.text = `${boss.name} (${boss.intervalo}h)`;
-        select.appendChild(opt);
-    });
+            // Mostrar info del usuario conectado y enlace a admin si corresponde
+            document.getElementById("userInfo").innerText = `Usuario: ${data.user.username} (${data.user.nickname || 'Sin Nick'})`;
+            if(data.user.role === 'admin') {
+                document.getElementById("adminLinkContainer").innerHTML = `<a href="/admin.html" class="admin-link">⚙️ Panel Admin</a>`;
+            }
+
+            // Llenar el selector de bosses si está vacío
+            const select = document.getElementById("bossSelect");
+            if(select.options.length <= 1) {
+                select.innerHTML = '<option value="TODOS">-- Todos los Bosses --</option>';
+                for(let bossName in configBossesGlobal) {
+                    let opt = document.createElement("option");
+                    opt.value = bossName;
+                    opt.innerText = bossName;
+                    select.appendChild(opt);
+                }
+            }
+
+            actualizarTablas();
+        }
+    } catch(e) {
+        console.error("Error cargando los datos:", e);
+    }
 }
 
 function cambiarBoss() {
-    bossActualIndex = document.getElementById("bossSelect").value;
-    renderTabla();
+    actualizarTablas();
 }
 
-function renderTabla() {
-    if (!configBosses.length) return;
-    const boss = configBosses[bossActualIndex];
-    document.getElementById("subInfo").innerText = `${boss.name.toUpperCase()} RESPAWN TRACKER | COOLDOWN ${boss.intervalo} HORAS`;
+function activarAudio() {
+    audioActivado = true;
+    audioAlerta.play().catch(() => {});
+    document.getElementById("btnAudio").innerText = "🔊 Alertas Activadas";
+    document.getElementById("btnAudio").style.backgroundColor = "#22c55e";
+}
 
+function parsearFecha(fechaStr) {
+    // Formato recibido: "DD/MM/YYYY HH:MM:SS"
+    if (!fechaStr) return null;
+    let partes = fechaStr.split(" ");
+    if(partes.length < 2) return null;
+    let fechaPartes = partes[0].split("/");
+    let horaPartes = partes[1].split(":");
+    if(fechaPartes.length < 3 || horaPartes.length < 3) return null;
+    return new Date(fechaPartes[2], fechaPartes[1] - 1, fechaPartes[0], horaPartes[0], horaPartes[1], horaPartes[2]);
+}
+
+function actualizarTablas() {
+    const bossSeleccionado = document.getElementById("bossSelect").value;
     const tbody = document.getElementById("tablaBody");
+    const tbodyProximos = document.getElementById("tablaProximosBody");
+    
     tbody.innerHTML = "";
+    let listaProximos = [];
+    let alertaSonando = false;
 
-    servidores.forEach(sv => {
-        let registro = datosGlobales.find(item => {
-            let bossCoincide = item.boss.toLowerCase().includes(boss.name.toLowerCase());
-            let svLimpio = item.servidor.toLowerCase().replace(/\s+/g, '');
-            let svTarget = sv.toLowerCase().replace(/\s+/g, '');
-            return bossCoincide && svLimpio === svTarget;
-        });
-
-        let fechaMuerte = registro ? registro.fecha : "Sin datos recientes";
-        let cazador = registro ? registro.cazador : "-";
-        let svKey = sv.replace(/\s+/g, '');
-
-        let tr = document.createElement("tr");
-        tr.innerHTML = `
-            <td><strong>${sv}</strong></td>
-            <td id="fecha-${svKey}">${fechaMuerte}</td>
-            <td>${cazador}</td>
-            <td id="respawn-${svKey}">--/-- --:--</td>
-            <td id="tiempo-${svKey}">Calculando...</td>
-        `;
-        tbody.appendChild(tr);
-    });
-
-    actualizarContadores();
-}
-
-function actualizarContadores() {
-    if (!configBosses.length) return;
-    const boss = configBosses[bossActualIndex];
-    const ahora = new Date();
-
-    servidores.forEach(sv => {
-        let svKey = sv.replace(/\s+/g, '');
-        let fechaTd = document.getElementById(`fecha-${svKey}`);
-        if (!fechaTd) return;
-        let fechaTexto = fechaTd.innerText.trim();
-
-        let respawnTd = document.getElementById(`respawn-${svKey}`);
-        let tiempoTd = document.getElementById(`tiempo-${svKey}`);
-
-        if (fechaTexto === "Sin datos recientes" || !fechaTexto) {
-            if(respawnTd) respawnTd.innerText = "N/A";
-            if(tiempoTd) {
-                tiempoTd.innerText = "N/A";
-                tiempoTd.className = "";
-            }
-            return;
-        }
-
-        let formatoLimpio = fechaTexto.replace(/-/g, '/');
-        let fMuerte = new Date(formatoLimpio);
-
-        if (isNaN(fMuerte.getTime())) {
-            if(respawnTd) respawnTd.innerText = "Formato inválido";
-            if(tiempoTd) tiempoTd.innerText = "Error";
-            return;
-        }
-
-        let fRespawn = new Date(fMuerte.getTime() + (boss.intervalo * 3600000));
-        let diferencia = fRespawn - ahora;
-
-        respawnTd.innerText = fRespawn.toLocaleString('es-VE', { 
-            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' 
-        });
-
-        let idAlertaKey = `${boss.name}-${sv}`;
-
-        if (diferencia <= 0) {
-            let tiempoPasado = Math.abs(diferencia);
-            let hPasadas = Math.floor(tiempoPasado / 3600000);
-            let mPasadas = Math.floor((tiempoPasado % 3600000) / 60000);
-            tiempoTd.innerHTML = `🟢 **¡VIVO!** (+${hPasadas}h ${mPasadas}m)`;
-            tiempoTd.className = "status-vivo";
-        } else {
-            let minutosRestantes = diferencia / 60000;
-            let hRestantes = Math.floor(diferencia / 3600000);
-            let mRestantes = Math.floor((diferencia % 3600000) / 60000);
-            let sRestantes = Math.floor((diferencia % 60000) / 1000);
-
-            // Alerta 5 minutos antes (entre 4.5 y 5.5 minutos)
-            if (minutosRestantes > 4.5 && minutosRestantes <= 5.5) {
-                tiempoTd.innerHTML = `⚠️ **¡5 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
-                tiempoTd.className = "alerta-5";
-                if (alertasDisparadas[idAlertaKey] !== '5m') {
-                    reproducirBeep(880, 400); // Tono agudo
-                    alertasDisparadas[idAlertaKey] = '5m';
-                }
-            } 
-            // Alerta 10 minutos antes (entre 9.5 y 10.5 minutos)
-            else if (minutosRestantes > 9.5 && minutosRestantes <= 10.5) {
-                tiempoTd.innerHTML = `🔔 **¡10 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
-                tiempoTd.className = "alerta-10";
-                if (alertasDisparadas[idAlertaKey] !== '10m') {
-                    reproducirBeep(440, 300); // Tono medio
-                    alertasDisparadas[idAlertaKey] = '10m';
-                }
-            } 
-            else {
-                tiempoTd.innerHTML = `⏳ ${hRestantes}h ${mRestantes}m ${sRestantes}s`;
-                tiempoTd.className = "status-tiempo";
-            }
+    // Procesar todos los registros de los logs
+    let mapaBossesServidor = {};
+    datosGlobales.forEach(reg => {
+        let clave = reg.boss + "_" + reg.servidor;
+        if(!mapaBossesServidor[clave]) {
+            mapaBossesServidor[clave] = reg; // Guardar el más reciente por boss y servidor
         }
     });
+
+    let filasTablaPrincipal = [];
+
+    for(let clave in mapaBossesServidor) {
+        let reg = mapaBossesServidor[clave];
+        let conf = configBossesGlobal[reg.boss];
+        
+        if(conf && conf.respawnMinutes) {
+            let fechaMuerte = parsearFecha(reg.fecha);
+            if(fechaMuerte) {
+                let respawnMs = conf.respawnMinutes * 60 * 1000;
+                let fechaRespawn = new Date(fechaMuerte.getTime() + respawnMs);
+                let ahora = new Date();
+                let diferenciaMs = fechaRespawn - ahora;
+
+                // Agregar a la lista general de próximos respawns si aún no ha pasado mucho tiempo
+                if(diferenciaMs > -300000) { // Hasta 5 min después de revivir
+                    listaProximos.push({
+                        boss: reg.boss,
+                        servidor: reg.servidor,
+                        fechaRespawn: fechaRespawn,
+                        diferenciaMs: diferenciaMs
+                    });
+                }
+
+                // Filtrar para la tabla principal según selección
+                if(bossSeleccionado === "TODOS" || reg.boss === bossSeleccionado) {
+                    let estadoHtml = "";
+                    let claseCss = "";
+
+                    if(diferenciaMs <= 0) {
+                        estadoHtml = `<span class="status-vivo">¡VIVO / YA RESPONDIÓ!</span>`;
+                    } else {
+                        let minsRestantes = Math.floor(diferenciaMs / 60000);
+                        let horas = Math.floor(minsRestantes / 60);
+                        let mins = minsRestantes % 60;
+                        let secs = Math.floor((diferenciaMs % 60000) / 1000);
+                        let tiempoTexto = (horas > 0 ? horas + "h " : "") + mins + "m " + secs + "s";
+
+                        if(diferenciaMs <= 300000) { // Menos de 5 min
+                            claseCss = "alerta-5";
+                            alertaSonando = true;
+                        } else if(diferenciaMs <= 600000) { // Menos de 10 min
+                            claseCss = "alerta-10";
+                        }
+
+                        estadoHtml = `<span class="status-tiempo ${claseCss}">${tiempoTexto}</span>`;
+                    }
+
+                    filasTablaPrincipal.push({
+                        servidor: reg.servidor,
+                        fecha: reg.fecha,
+                        cazador: reg.cazador,
+                        respawnStr: fechaRespawn.toLocaleTimeString(),
+                        estadoHtml: estadoHtml,
+                        diferenciaMs: diferenciaMs
+                    });
+                }
+            }
+        }
+    }
+
+    // Renderizar tabla principal
+    if(filasTablaPrincipal.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay registros para este jefe.</td></tr>`;
+    } else {
+        filasTablaPrincipal.sort((a, b) => a.diferenciaMs - b.diferenciaMs);
+        filasTablaPrincipal.forEach(f => {
+            tbody.innerHTML += `<tr>
+                <td><b>${f.servidor}</b></td>
+                <td>${f.fecha}</td>
+                <td>${f.cazador}</td>
+                <td>${f.respawnStr}</td>
+                <td>${f.estadoHtml}</td>
+            </tr>`;
+        });
+    }
+
+    // Renderizar tabla de los 20 Próximos Respawns
+    listaProximos.sort((a, b) => a.diferenciaMs - b.diferenciaMs);
+    let top20 = listaProximos.slice(0, 20);
+    tbodyProximos.innerHTML = "";
+
+    if(top20.length === 0) {
+        tbodyProximos.innerHTML = `<tr><td colspan="4" style="text-align:center;">Sin datos de próximos respawns.</td></tr>`;
+    } else {
+        top20.forEach(item => {
+            let minsRestantes = Math.floor(item.diferenciaMs / 60000);
+            let tiempoTexto = "¡VIVO!";
+            let claseCss = "status-vivo";
+
+            if(item.diferenciaMs > 0) {
+                let horas = Math.floor(minsRestantes / 60);
+                let mins = minsRestantes % 60;
+                let secs = Math.floor((item.diferenciaMs % 60000) / 1000);
+                tiempoTexto = (horas > 0 ? horas + "h " : "") + mins + "m " + secs + "s";
+                
+                if(item.diferenciaMs <= 300000) claseCss = "alerta-5";
+                else if(item.diferenciaMs <= 600000) claseCss = "alerta-10";
+                else claseCss = "status-tiempo";
+            }
+
+            tbodyProximos.innerHTML += `<tr>
+                <td><b>${item.boss}</b></td>
+                <td>${item.servidor}</td>
+                <td>${item.fechaRespawn.toLocaleTimeString()}</td>
+                <td><span class="${claseCss}">${tiempoTexto}</span></td>
+            </tr>`;
+        });
+    }
+
+    // Alerta sonora si se activó y hay jefes próximos
+    if(audioActivado && alertaSonando) {
+        audioAlerta.play().catch(() => {});
+    }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    cargarDatosServidor();
-    setInterval(actualizarContadores, 1000);
-    setInterval(cargarDatosServidor, 120000);
-});
+// Cargar datos al iniciar y actualizar automáticamente cada 30 segundos
+cargarDatos();
+setInterval(cargarDatos, 30000);
