@@ -1,11 +1,34 @@
 [
-  { "name": "Selupan", "intervalo": 34, "mapa": "Raklion Hatchery" },
-  { "name": "Nightmare", "intervalo": 40, "mapa": "Kanturu" },
-  { "name": "Nix", "intervalo": 100, "mapa": "Nixies Lake" },
-  { "name": "Lord Silvester", "intervalo": 90, "mapa": "Uruk Mountain" },
-  { "name": "Lord Of Ferea", "intervalo": 108, "mapa": "Ferea" },
-  { "name": "Core Magriffy", "intervalo": 100, "mapa": "Nars" },
-  { "name": "God Of Darkness", "intervalo": 128, "mapa": "Swamp Of Darkness" },
-  { "name": "Kundun", "intervalo": 24, "mapa": "Kalima 7" },
-  { "name": "Medusa", "intervalo": 12, "mapa": "Swamp of Peace" }
+  { "name": "Selupan", "intervalo": 34, "mapa": "Raklion Hatchery", "tipo": "respawn" },
+  { "name": "Nightmare", "intervalo": 40, "mapa": "Kanturu", "tipo": "respawn" },
+  { "name": "Nix", "intervalo": 100, "mapa": "Nixies Lake", "tipo": "respawn" },
+  { "name": "Lord Silvester", "intervalo": 90, "mapa": "Uruk Mountain", "tipo": "respawn" },
+  { "name": "Lord Of Ferea", "intervalo": 108, "mapa": "Ferea", "tipo": "respawn" },
+  { "name": "Core Magriffy", "intervalo": 100, "mapa": "Nars", "tipo": "respawn" },
+  { "name": "God Of Darkness", "intervalo": 128, "mapa": "Swamp Of Darkness", "tipo": "respawn" },
+  { 
+    "name": "Kundun", 
+    "mapa": "Kalima 7", 
+    "tipo": "horario_fijo",
+    "horarios": {
+      "1": "16:00",
+      "2": "04:00",
+      "3": "23:00",
+      "4": "02:00",
+      "5": "16:00",
+      "6": "21:00",
+      "0": "02:00"
+    }
+  },
+  { 
+    "name": "Medusa", 
+    "mapa": "Swamp of Peace", 
+    "tipo": "horario_fijo",
+    "horarios": {
+      "2": "21:00",
+      "5": "21:00",
+      "6": "16:00",
+      "0": "18:00"
+    }
+  }
 ]
