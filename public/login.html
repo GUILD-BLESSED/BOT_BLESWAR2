@@ -49,7 +49,6 @@
             document.getElementById("btnSubmit").innerText = esRegistro ? "Registrarse" : "Entrar";
             document.getElementById("authForm").action = esRegistro ? "/api/register" : "/api/login";
             
-            // Mostrar u ocultar el campo de Nick del personaje
             const inputNick = document.getElementById("campoNick");
             if (esRegistro) {
                 inputNick.classList.remove("oculto");
