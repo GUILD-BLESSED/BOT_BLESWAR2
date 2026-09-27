@@ -23,9 +23,9 @@
         <div id="msgAlerta" class="msg"></div>
 
         <form id="authForm" action="/api/login" method="POST">
-            <input type="text" name="username" placeholder="Usuario / Correo" required>
-            <input type="text" id="campoNick" name="nickname" placeholder="Nick de tu Personaje (MegaMu)" class="oculto">
+            <input type="text" name="username" placeholder="Usuario" required>
             <input type="password" name="password" placeholder="Contraseña" required>
+            <input type="text" id="inputNick" name="character_nick" placeholder="Nick de tu Personaje" class="oculto">
             <button type="submit" id="btnSubmit">Entrar</button>
         </form>
 
@@ -40,8 +40,9 @@
         if(urlParams.get('error') === 'invalid') msgDiv.innerText = "Usuario o contraseña incorrectos.";
         if(urlParams.get('error') === 'pending') msgDiv.innerText = "Tu cuenta está pendiente de aprobación por el Admin.";
         if(urlParams.get('error') === 'banned') msgDiv.innerText = "Tu cuenta ha sido baneada.";
-        if(urlParams.get('error') === 'userexists') msgDiv.innerText = "El nombre de usuario o nick ya existe.";
+        if(urlParams.get('error') === 'userexists') msgDiv.innerText = "El nombre de usuario ya existe.";
         if(urlParams.get('registered') === 'true') msgDiv.innerText = "¡Registro exitoso! Espera a que un administrador active tu cuenta.";
+        if(urlParams.get('error') === 'empty') msgDiv.innerText = "Todos los campos son obligatorios.";
 
         function cambiarModo() {
             esRegistro = !esRegistro;
@@ -49,13 +50,13 @@
             document.getElementById("btnSubmit").innerText = esRegistro ? "Registrarse" : "Entrar";
             document.getElementById("authForm").action = esRegistro ? "/api/register" : "/api/login";
             
-            const inputNick = document.getElementById("campoNick");
+            let nickInput = document.getElementById("inputNick");
             if (esRegistro) {
-                inputNick.classList.remove("oculto");
-                inputNick.required = true;
+                nickInput.classList.remove("oculto");
+                nickInput.required = true;
             } else {
-                inputNick.classList.add("oculto");
-                inputNick.required = false;
+                nickInput.classList.add("oculto");
+                nickInput.required = false;
             }
             msgDiv.innerText = "";
         }
