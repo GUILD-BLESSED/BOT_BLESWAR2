@@ -7,17 +7,20 @@ const configBosses = require('./bosses.json');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Servir archivos estáticos (HTML, CSS, JS del cliente)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ruta API para que la web consulte los datos frescos de los jefes
-app.api = app.get('/api/bosses', async (req, res) => {
+app.get('/api/bosses', async (req, res) => {
     try {
-        const { data } = await axios.get("https://es.megamu.net/boss-log");
+        const { data } = await axios.get("https://es.megamu.net/boss-log", {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+        
         const $ = cheerio.load(data);
         let registros = [];
 
-        $('.table tbody tr').each((i, row) => {
+        $('table tr, tbody tr').each((i, row) => {
             const cols = $(row).find('td');
             if (cols.length >= 4) {
                 registros.push({
