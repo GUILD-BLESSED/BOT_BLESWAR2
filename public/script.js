@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const bossSelect = document.getElementById('bossSelect');
-    const tablaPrincipalBody = document.getElementById('tablaPrincipalBody');
+    const tablaBody = document.getElementById('tablaBody');
+    const subInfo = document.getElementById('subInfo');
     const btnSonido = document.getElementById('btnSonido');
 
     let datosGlobales = [];
@@ -18,6 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function cargarDatos() {
         try {
             const res = await fetch('/api/bosses');
+            if (res.status === 401) {
+                window.location.href = '/login.html';
+                return;
+            }
             const data = await res.json();
 
             if (data.success) {
@@ -25,26 +30,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 configGlobal = data.configBosses;
 
                 poblarSelectBosses();
-                actualizarTablaPrincipal();
-            } else {
-                console.error("Error al obtener datos:", data.error);
+                actualizarTabla();
             }
         } catch (e) {
-            console.error("Fallo de conexión con la API:", e);
+            console.error("Fallo al cargar datos:", e);
         }
     }
 
     function poblarSelectBosses() {
         if (!bossSelect) return;
         const valorActual = bossSelect.value;
-        bossSelect.innerHTML = '<option value="todos">-- Todos los Bosses --</option>';
+        bossSelect.innerHTML = '';
 
+        let index = 0;
         Object.keys(configGlobal).forEach(bossName => {
             const opt = document.createElement('option');
             opt.value = bossName;
             opt.textContent = `${bossName} (${Math.round(configGlobal[bossName].respawnMinutes / 60)}h)`;
-            if (bossName === valorActual) opt.selected = true;
+            if (bossName === valorActual || (index === 0 && !valorActual)) opt.selected = true;
             bossSelect.appendChild(opt);
+            index++;
         });
     }
 
@@ -55,68 +60,71 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Date(partes[0], partes[1] - 1, partes[2], partes[3], partes[4], partes[5]);
     }
 
-    function actualizarTablaPrincipal() {
-        if (!tablaPrincipalBody) return;
+    function actualizarTabla() {
+        if (!tablaBody || !bossSelect) return;
 
-        const bossSeleccionado = bossSelect ? bossSelect.value : 'todos';
-        tablaPrincipalBody.innerHTML = '';
+        const bossSeleccionado = bossSelect.value;
+        const config = configGlobal[bossSeleccionado];
+        if (!config) return;
 
-        Object.keys(configGlobal).forEach(bossName => {
-            if (bossSeleccionado !== 'todos' && bossSeleccionado !== bossName) return;
+        if (subInfo) {
+            subInfo.textContent = `${bossSeleccionado.toUpperCase()} RESPAWN TRACKER | COOLDOWN ${Math.round(config.respawnMinutes / 60)} HORAS`;
+        }
 
-            const config = configGlobal[bossName];
-            const respawnMs = config.respawnMinutes * 60 * 1000;
+        const respawnMs = config.respawnMinutes * 60 * 1000;
+        const registrosBoss = datosGlobales.filter(r => r.boss.toLowerCase() === bossSeleccionado.toLowerCase());
+        const serversUnicos = ['Sv 1', 'Sv 2', 'Sv 3', 'Sv 4', 'Sv 5', 'Sv 6', 'Sv 7', 'Sv 8', 'Sv 10', 'Sv 11', 'Sv 12', 'Sv 14', 'Sv 15', 'Sv 16', 'Sv 17', 'Sv 19', 'Speed 1', 'Speed 2', 'Speed 3'];
 
-            const registrosBoss = datosGlobales.filter(r => r.boss.toLowerCase() === bossName.toLowerCase());
-            const serversUnicos = ['Sv 1', 'Sv 2', 'Sv 3', 'Sv 4', 'Sv 5', 'Sv 6', 'Sv 7', 'Sv 8', 'Sv 10', 'Sv 11', 'Sv 12', 'Sv 14', 'Sv 15', 'Sv 16', 'Sv 17', 'Sv 19', 'Speed 1', 'Speed 2', 'Speed 3'];
+        tablaBody.innerHTML = '';
 
-            serversUnicos.forEach(sv => {
-                const regSv = registrosBoss.find(r => r.servidor.toLowerCase() === sv.toLowerCase());
-                
-                let ultimaMuerteText = "Sin datos recientes";
-                let cazadorText = "-";
-                let proximaMuerteTime = null;
-                let tiempoRestanteText = "N/A";
-                let msRestantes = 0;
+        serversUnicos.forEach(sv => {
+            const regSv = registrosBoss.find(r => r.servidor.toLowerCase() === sv.toLowerCase());
+            
+            let ultimaMuerteText = "Sin datos recientes";
+            let cazadorText = "-";
+            let proximaMuerteTime = null;
+            let tiempoRestanteText = "N/A";
+            let claseTiempo = "";
 
-                if (regSv) {
-                    ultimaMuerteText = regSv.fecha;
-                    cazadorText = regSv.cazador;
-                    const fechaMuerte = parsearFechaMegaMu(regSv.fecha);
+            if (regSv) {
+                ultimaMuerteText = regSv.fecha;
+                cazadorText = regSv.cazador;
+                const fechaMuerte = parsearFechaMegaMu(regSv.fecha);
 
-                    if (fechaMuerte && !isNaN(fechaMuerte)) {
-                        proximaMuerteTime = new Date(fechaMuerte.getTime() + respawnMs);
-                        msRestantes = proximaMuerteTime.getTime() - new Date().getTime();
+                if (fechaMuerte && !isNaN(fechaMuerte)) {
+                    proximaMuerteTime = new Date(fechaMuerte.getTime() + respawnMs);
+                    const msRestantes = proximaMuerteTime.getTime() - new Date().getTime();
 
-                        const opcionesFecha = { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-                        proximaMuerteTime.toLocaleString('es-VE', opcionesFecha);
+                    const opcionesFecha = { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                    const proximoRespawnEst = proximaMuerteTime.toLocaleString('es-VE', opcionesFecha);
 
-                        if (msRestantes > 0) {
-                            const horas = Math.floor(msRestantes / (1000 * 60 * 60));
-                            const minutos = Math.floor((msRestantes % (1000 * 60 * 60)) / (1000 * 60));
-                            const segundos = Math.floor((msRestantes % (1000 * 60)) / 1000);
-                            tiempoRestanteText = `⏳ ${horas}h ${minutos}m ${segundos}s`;
-                        } else {
-                            tiempoRestanteText = "🟢 ¡RESPAWN DISPONIBLE!";
-                        }
+                    if (msRestantes > 0) {
+                        const horas = Math.floor(msRestantes / (1000 * 60 * 60));
+                        const minutos = Math.floor((msRestantes % (1000 * 60 * 60)) / (1000 * 60));
+                        const segundos = Math.floor((msRestantes % (1000 * 60)) / 1000);
+                        tiempoRestanteText = `⏳ ${horas}h ${minutos}m ${segundos}s`;
+                        claseTiempo = "status-tiempo";
+                    } else {
+                        tiempoRestanteText = "🟢 ¡RESPAWN DISPONIBLE!";
+                        claseTiempo = "status-vivo";
                     }
                 }
+            }
 
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${sv}</strong></td>
-                    <td>${ultimaMuerteText}</td>
-                    <td>${cazadorText}</td>
-                    <td>${proximaMuerteTime ? proximaMuerteTime.toLocaleString() : 'N/A'}</td>
-                    <td>${tiempoRestanteText}</td>
-                `;
-                tablaPrincipalBody.appendChild(tr);
-            });
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${sv}</strong></td>
+                <td>${ultimaMuerteText}</td>
+                <td>${cazadorText}</td>
+                <td>${proximaMuerteTime ? proximaMuerteTime.toLocaleString() : 'N/A'}</td>
+                <td class="${claseTiempo}">${tiempoRestanteText}</td>
+            `;
+            tablaBody.appendChild(tr);
         });
     }
 
     if (bossSelect) {
-        bossSelect.addEventListener('change', actualizarTablaPrincipal);
+        bossSelect.addEventListener('change', actualizarTabla);
     }
 
     cargarDatos();
