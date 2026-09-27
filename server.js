@@ -16,7 +16,7 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
     else console.log("📦 Base de datos conectada correctamente.");
 });
 
-// Crear tabla de usuarios incluyendo el campo nickname
+// Crear tabla de usuarios
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +58,6 @@ app.get('/login.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// Registro con Nick de personaje
 app.post('/api/register', async (req, res) => {
     const { username, nickname, password } = req.body;
     if (!username || !nickname || !password) return res.redirect('/login.html?error=empty');
@@ -114,7 +113,7 @@ app.get('/', (req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Mostrar el Nick en el panel de administración
+// Administración de usuarios
 app.get('/api/admin/users', requiereAdminAPI, (req, res) => {
     db.all(`SELECT id, username, nickname, status, role FROM users`, [], (err, rows) => {
         if (err) return res.status(500).json({ success: false });
@@ -124,7 +123,16 @@ app.get('/api/admin/users', requiereAdminAPI, (req, res) => {
 
 app.post('/api/admin/update-status', requiereAdminAPI, (req, res) => {
     const { userId, status } = req.body;
-    db.run(`UPDATE users SET status = ? WHERE id = ? AND role != 'admin'`, [status, userId], function(err) {
+    db.run(`UPDATE users SET status = ? WHERE id = ?`, [status, userId], function(err) {
+        if (err) return res.status(500).json({ success: false });
+        res.json({ success: true });
+    });
+});
+
+// Nueva ruta para alternar el rol (admin / user)
+app.post('/api/admin/update-role', requiereAdminAPI, (req, res) => {
+    const { userId, role } = req.body;
+    db.run(`UPDATE users SET role = ? WHERE id = ?`, [role, userId], function(err) {
         if (err) return res.status(500).json({ success: false });
         res.json({ success: true });
     });
