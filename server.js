@@ -235,7 +235,10 @@ app.get('/api/bosses', requiereLoginAPI, async (req, res) => {
         });
         const $ = cheerio.load(data);
         let registros = [];
-        $('table tr, tbody tr').each((i, row) => {
+        
+        // MODIFICACIÓN 1: Restringimos la búsqueda solo a la primera tabla (Registro en vivo) 
+        // para ignorar la tabla desincronizada de servidores.
+        $('table').first().find('tbody tr').each((i, row) => {
             const cols = $(row).find('td');
             if (cols.length >= 4) {
                 const fechaLimpia = cols.eq(0).text().trim(); 
@@ -287,7 +290,6 @@ io.on('connection', async (socket) => {
                 args: [user.username, user.character_nick || user.username, cleanMsg]
             });
 
-            // Limpieza automática para conservar solo los últimos 100 mensajes
             await db.execute(`
                 DELETE FROM chat_messages 
                 WHERE id NOT IN (
@@ -310,4 +312,53 @@ io.on('connection', async (socket) => {
     });
 });
 
+// -------------------------------------------------------------------------
+// MODIFICACIÓN 2: TRACKER EN SEGUNDO PLANO PARA DETECTAR NUEVOS BOSSES EN VIVO
+// -------------------------------------------------------------------------
+let ultimoRegistroGuardado = "";
+
+async function scrapearRegistroJefes() {
+    try {
+        const { data } = await axios.get('https://es.megamu.net/boss-log', {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+        });
+        const $ = cheerio.load(data);
+
+        // Extraer únicamente la primera fila de la primera tabla (log real)
+        const primeraFila = $('table').first().find('tbody tr').first();
+
+        if (!primeraFila.length) return;
+
+        const cols = primeraFila.find('td');
+        const fechaStr = cols.eq(0).text().trim();
+        const monstruo = cols.eq(1).text().trim();
+        const jugador = cols.eq(2).text().trim();
+        const servidor = cols.eq(3).text().trim();
+
+        const registroActual = `${fechaStr}-${monstruo}-${servidor}-${jugador}`;
+
+        if (registroActual !== ultimoRegistroGuardado && ultimoRegistroGuardado !== "") {
+            console.log(`🟢 NUEVO BOSS: ${monstruo} asesinado por ${jugador} en ${servidor} a las ${fechaStr}`);
+            ultimoRegistroGuardado = registroActual;
+
+            // Emitimos la alerta a todos los clientes conectados (puedes escuchar 'alerta_nuevo_boss' en tu frontend)
+            io.emit('alerta_nuevo_boss', {
+                fecha: fechaStr,
+                boss: monstruo,
+                cazador: jugador,
+                servidor: servidor
+            });
+            
+        } else if (ultimoRegistroGuardado === "") {
+            ultimoRegistroGuardado = registroActual;
+        }
+    } catch (error) {
+        console.error("⚠️ Error en scraper de fondo:", error.message);
+    }
+}
+
+// Ejecutar el scraper independiente cada 30 segundos
+setInterval(scrapearRegistroJefes, 30000);
+
 server.listen(PORT, () => console.log(`🌐 Servidor BLESWAR corriendo en el puerto ${PORT}`));
+            
