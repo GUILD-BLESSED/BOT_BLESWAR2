@@ -11,6 +11,107 @@ let audioContext = null;
 let alertasDisparadas = {};
 let socket = null;
 
+// -------------------------------------------------------------------------
+// FUNCIONES DE NOTIFICACIONES NATIVAS (CAPACITOR)
+// -------------------------------------------------------------------------
+async function solicitarPermisosNotificaciones() {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        try {
+            const perm = await window.Capacitor.Plugins.LocalNotifications.checkPermissions();
+            if (perm.display !== 'granted') {
+                await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
+            }
+        } catch (e) {
+            console.log("⚠️ Error solicitando permisos de notificaciones:", e);
+        }
+    }
+}
+
+function generarIdNotificacion(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+// Programa la alerta en el teléfono 10 minutos antes de la hora de respawn
+async function programarNotificacionLocal(bossName, servidor, fechaRespawn) {
+    if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.LocalNotifications) return;
+
+    // Calcular la hora exacta de la notificación: 10 minutos antes del respawn
+    const tiempoAlerta = new Date(fechaRespawn.getTime() - (10 * 60 * 1000));
+    const ahora = new Date();
+
+    // Solo programar si la hora de la alerta aún no ha pasado
+    if (tiempoAlerta > ahora) {
+        const idNotif = generarIdNotificacion(`${bossName}-${servidor}-${fechaRespawn.getTime()}`);
+        
+        try {
+            await window.Capacitor.Plugins.LocalNotifications.schedule({
+                notifications: [
+                    {
+                        title: `⚠️ ¡Boss Cerca: ${bossName}!`,
+                        body: `Faltan 10 minutos para que reaparezca ${bossName} en ${servidor}. ¡Alístate!`,
+                        id: idNotif,
+                        schedule: { at: tiempoAlerta },
+                        smallIcon: "res://ic_stat_icon_config",
+                        actionTypeId: "",
+                        extra: null
+                    }
+                ]
+            });
+        } catch (e) {
+            console.log("⚠️ Error al programar notificación:", e);
+        }
+    }
+}
+
+// Envía una notificación instantánea al teléfono cuando la app está abierta
+async function enviarNotificacionInmediata(titulo, mensaje) {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        try {
+            await window.Capacitor.Plugins.LocalNotifications.schedule({
+                notifications: [
+                    {
+                        title: titulo,
+                        body: mensaje,
+                        id: Math.floor(Math.random() * 100000),
+                        schedule: { at: new Date(Date.now() + 500) }
+                    }
+                ]
+            });
+        } catch (e) {
+            console.log("⚠️ Error al enviar notificación inmediata:", e);
+        }
+    }
+}
+
+function programarNotificacionesTodosBosses() {
+    if (!configBosses.length || !datosGlobales.length) return;
+
+    configBosses.forEach(boss => {
+        servidores.forEach(sv => {
+            let registro = datosGlobales.find(item => 
+                item.boss.toLowerCase().includes(boss.name.toLowerCase()) && 
+                item.servidor.toLowerCase().replace(/\s+/g, '') === sv.toLowerCase().replace(/\s+/g, '')
+            );
+
+            if (registro && registro.fecha) {
+                let fMuerte = new Date(registro.fecha.replace(/-/g, '/'));
+                if (!isNaN(fMuerte.getTime())) {
+                    let fRespawn = new Date(fMuerte.getTime() + (boss.intervalo * 3600000));
+                    programarNotificacionLocal(boss.name, sv, fRespawn);
+                }
+            }
+        });
+    });
+}
+
+// -------------------------------------------------------------------------
+// FUNCIONES GENERALES Y ALERTAS SONORAS
+// -------------------------------------------------------------------------
 function activarAudio() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     document.getElementById("btnAudio").innerText = "🔊 Alertas Sonoras Activas";
@@ -46,6 +147,7 @@ async function cargarDatosServidor() {
 
             inicializarSelect();
             renderTabla();
+            programarNotificacionesTodosBosses();
         }
     } catch (e) {
         console.error("Error al obtener los datos:", e);
@@ -142,11 +244,19 @@ function actualizarContadores() {
             if ((diferencia / 60000) > 4.5 && (diferencia / 60000) <= 5.5) {
                 tiempoTd.innerHTML = `⚠️ **¡5 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
                 tiempoTd.className = "alerta-5";
-                if(alertasDisparadas[idAlerta] !== '5m') { reproducirBeep(880, 400); alertasDisparadas[idAlerta] = '5m'; }
+                if(alertasDisparadas[idAlerta] !== '5m') { 
+                    reproducirBeep(880, 400); 
+                    enviarNotificacionInmediata(`⚠️ ¡5 MINUTOS!`, `El Boss ${bossActual.name} en ${sv} reaparece en 5 minutos.`);
+                    alertasDisparadas[idAlerta] = '5m'; 
+                }
             } else if ((diferencia / 60000) > 9.5 && (diferencia / 60000) <= 10.5) {
                 tiempoTd.innerHTML = `🔔 **¡10 MINUTOS!** (${mRestantes}m ${sRestantes}s)`;
                 tiempoTd.className = "alerta-10";
-                if(alertasDisparadas[idAlerta] !== '10m') { reproducirBeep(440, 300); alertasDisparadas[idAlerta] = '10m'; }
+                if(alertasDisparadas[idAlerta] !== '10m') { 
+                    reproducirBeep(440, 300); 
+                    enviarNotificacionInmediata(`🔔 ¡10 MINUTOS!`, `El Boss ${bossActual.name} en ${sv} reaparece en 10 minutos.`);
+                    alertasDisparadas[idAlerta] = '10m'; 
+                }
             } else {
                 tiempoTd.innerHTML = `⏳ ${hRestantes}h ${mRestantes}m ${sRestantes}s`;
                 tiempoTd.className = "status-tiempo";
@@ -224,7 +334,6 @@ function agregarMensajeAlDOM(data) {
     const chatBox = document.getElementById("chatMessages");
     if (!chatBox) return;
 
-    // Eliminar texto de carga inicial si existe
     if (chatBox.querySelector('div[style*="text-align: center"]')) {
         chatBox.innerHTML = "";
     }
@@ -259,10 +368,14 @@ function escapeHtml(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+// -------------------------------------------------------------------------
+// INICIALIZACIÓN
+// -------------------------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
+    solicitarPermisosNotificaciones();
     cargarDatosServidor();
     inicializarChat();
     setInterval(actualizarContadores, 1000);
     setInterval(cargarDatosServidor, 120000);
 });
-                    
+                                            
