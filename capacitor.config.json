@@ -1,0 +1,9 @@
+{
+  "appId": "com.bleswar.bosstracker",
+  "appName": "Bleswar Boss Tracker",
+  "webDir": "public",
+  "server": {
+    "url": "https://bot-bleswar2.onrender.com/",
+    "cleartext": true
+  }
+}
