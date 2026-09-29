@@ -12,6 +12,7 @@
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "@capacitor/local-notifications": "^6.0.0",
     "@capacitor/core": "^6.0.0",
     "@capacitor/android": "^6.0.0", 
     "express-session": "^1.18.0",
