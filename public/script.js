@@ -1,7 +1,7 @@
 const servidores = [
     "Sv 1", "Sv 2", "Sv 3", "Sv 4", "Sv 5", "Sv 6", "Sv 7", "Sv 8", 
     "Sv 10", "Sv 11", "Sv 12", "Sv 14", "Sv 15", "Sv 16", "Sv 17", "Sv 19", 
-    "Speed 1", "Speed 2", "Speed 3"
+    "Speed 1", "Speed 2", "Speed 3", "Speed 4"
 ];
 
 let bossActualIndex = 0;
