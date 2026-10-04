@@ -1,11 +1,12 @@
 [
+  
   { "name": "Selupan", "intervalo": 34, "mapa": "Raklion Hatchery", "tipo": "respawn" },
-  { "name": "Nightmare", "intervalo": 40, "mapa": "Kanturu", "tipo": "respawn" },
-  { "name": "Nix", "intervalo": 100, "mapa": "Nixies Lake", "tipo": "respawn" },
-  { "name": "Lord Silvester", "intervalo": 90, "mapa": "Uruk Mountain", "tipo": "respawn" },
-  { "name": "Lord Of Ferea", "intervalo": 108, "mapa": "Ferea", "tipo": "respawn" },
-  { "name": "Core Magriffy", "intervalo": 100, "mapa": "Nars", "tipo": "respawn" },
-  { "name": "God Of Darkness", "intervalo": 128, "mapa": "Swamp Of Darkness", "tipo": "respawn" },
+  { "name": "Nightmare", "intervalo": 43.75, "mapa": "Kanturu", "tipo": "respawn" },
+  { "name": "Nix", "intervalo": 104.50, "mapa": "Nixies Lake", "tipo": "respawn" },
+  { "name": "Lord Silvester", "intervalo": 96, "mapa": "Uruk Mountain", "tipo": "respawn" },
+  { "name": "Lord Of Ferea", "intervalo": 85, "mapa": "Ferea", "tipo": "respawn" },
+  { "name": "Core Magriffy", "intervalo": 87.66, "mapa": "Nars", "tipo": "respawn" },
+  { "name": "God Of Darkness", "intervalo": 118, "mapa": "Swamp Of Darkness", "tipo": "respawn" },
   { 
     "name": "Kundun", 
     "mapa": "Kalima 7", 
